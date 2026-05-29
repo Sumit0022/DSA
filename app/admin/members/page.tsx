@@ -1,7 +1,7 @@
 // app/admin/members/page.tsx
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, Suspense } from "react";
 import { collection, getDocs, query, orderBy, Timestamp, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Search, Download, AlertCircle, CheckCircle2, ShieldCheck, X, Crown, Loader2, UserMinus } from "lucide-react";
@@ -25,7 +25,6 @@ interface Member {
   joinedAt: Timestamp | any;
 }
 
-// Political Party Style Posts
 const POST_TITLES = [
   "President",
   "Working President",
@@ -37,7 +36,7 @@ const POST_TITLES = [
   "Executive Member"
 ];
 
-export default function MembersLedger() {
+function MembersLedgerContent() {
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get("search") || "";
 
@@ -47,7 +46,6 @@ export default function MembersLedger() {
   
   const [selectedMemberForPass, setSelectedMemberForPass] = useState<Member | null>(null);
   
-  // States for Hierarchy Assignment
   const [selectedMemberForRole, setSelectedMemberForRole] = useState<Member | null>(null);
   const [assignLevel, setAssignLevel] = useState("District");
   const [assignTitle, setAssignTitle] = useState(POST_TITLES[0]);
@@ -93,7 +91,6 @@ export default function MembersLedger() {
     );
   }, [members, searchQuery]);
 
-  // Handle Hierarchy Assignment
   const handleAssignRole = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMemberForRole) return;
@@ -104,7 +101,6 @@ export default function MembersLedger() {
     if (assignLevel === "District") location = selectedMemberForRole.district;
     if (assignLevel === "State") location = selectedMemberForRole.state;
 
-    // e.g., "District President" or "State General Secretary"
     const combinedRoleDisplay = assignLevel === "National" 
       ? `National ${assignTitle}` 
       : `${assignLevel} ${assignTitle}`;
@@ -117,7 +113,6 @@ export default function MembersLedger() {
         roleLocation: location
       });
       
-      // Update local state instantly
       setMembers(members.map(m => 
         m.id === selectedMemberForRole.id 
           ? { ...m, role: combinedRoleDisplay, roleLevel: assignLevel, roleTitle: assignTitle, roleLocation: location } 
@@ -133,7 +128,6 @@ export default function MembersLedger() {
     }
   };
 
-  // Handle Role Removal (Demote to Citizen)
   const handleRemoveRole = async () => {
     if (!selectedMemberForRole) return;
     setIsUpdatingRole(true);
@@ -160,7 +154,6 @@ export default function MembersLedger() {
   return (
     <div className="space-y-6">
       
-      {/* HEADER & ACTION BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight">Citizens Ledger</h1>
@@ -172,7 +165,6 @@ export default function MembersLedger() {
         </button>
       </div>
 
-      {/* SEARCH BAR */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input 
@@ -184,7 +176,6 @@ export default function MembersLedger() {
         />
       </div>
 
-      {/* THE DATA LEDGER */}
       <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -210,7 +201,6 @@ export default function MembersLedger() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <p className="font-bold text-gray-900">{member.name}</p>
-                        {/* THE FIX: Wrapped the Crown icon in a span to prevent TS Title error */}
                         {member.role && (
                           <span title="Alliance Leader">
                             <Crown className="w-4 h-4 text-amber-500" />
@@ -285,7 +275,6 @@ export default function MembersLedger() {
         </div>
       </div>
 
-      {/* PASS MODAL */}
       <AnimatePresence>
         {selectedMemberForPass && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm overflow-y-auto">
@@ -302,7 +291,6 @@ export default function MembersLedger() {
         )}
       </AnimatePresence>
 
-      {/* DYNAMIC ROLE ASSIGNMENT MODAL */}
       <AnimatePresence>
         {selectedMemberForRole && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -321,7 +309,6 @@ export default function MembersLedger() {
               <form onSubmit={handleAssignRole} className="p-6 space-y-5">
                 
                 <div className="space-y-4">
-                  {/* DROPDOWN 1: JURISDICTION LEVEL */}
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Jurisdiction Level</label>
                     <select 
@@ -335,7 +322,6 @@ export default function MembersLedger() {
                     </select>
                   </div>
 
-                  {/* DROPDOWN 2: POST/ROLE NAME */}
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Official Post</label>
                     <select 
@@ -386,5 +372,14 @@ export default function MembersLedger() {
       </AnimatePresence>
 
     </div>
+  );
+}
+
+// 4. Wrap with Suspense for Vercel
+export default function MembersLedger() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading ledger...</div>}>
+      <MembersLedgerContent />
+    </Suspense>
   );
 }

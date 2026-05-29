@@ -323,59 +323,58 @@ export default function LocalLeadersPage() {
       {/* ========================================== */}
       <AnimatePresence>
         {showRules && !showChat && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm overflow-y-auto">
-            <div className="min-h-full flex items-center justify-center p-4 py-12">
-              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl relative z-10">
-                
-                <div className="bg-gray-900 text-white p-6 flex justify-between items-center">
-                  <h3 className="text-xl font-black">Official Eligibility Protocol</h3>
-                  <button onClick={() => {setShowRules(false); setAgreed(false);}} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            {/* THE FIX: Added flex flex-col and max-h-[85vh] */}
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl relative z-10 flex flex-col max-h-[85vh]">
+              
+              {/* Header: shrink-0 keeps it from squishing */}
+              <div className="bg-gray-900 text-white p-5 md:p-6 flex justify-between items-center shrink-0">
+                <h3 className="text-lg md:text-xl font-black">Official Eligibility Protocol</h3>
+                <button onClick={() => {setShowRules(false); setAgreed(false);}} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+              </div>
+
+              {/* Content: overflow-y-auto makes it scrollable */}
+              <div className="p-5 md:p-8 space-y-6 overflow-y-auto">
+                <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex gap-3 text-red-800">
+                  <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <p className="text-sm font-semibold">Leadership in DSA is not an honorary title. It is a strict operational duty. Read the rules carefully before applying.</p>
                 </div>
 
-                <div className="p-6 md:p-8 space-y-6">
-                  <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex gap-3 text-red-800">
-                    <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-                    <p className="text-sm font-semibold">Leadership in DSA is not an honorary title. It is a strict operational duty. Read the rules carefully before applying.</p>
-                  </div>
-
-                  <ul className="space-y-4">
-                    <li className="flex gap-4 items-start">
-                      <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0 text-[#007AFF] font-bold">1</div>
-                      <div>
-                        <h4 className="font-bold text-gray-900">Active Ground Participation</h4>
-                        <p className="text-sm text-gray-500 mt-1">You must actively participate in and organize regional meetings, protests, and social drives.</p>
-                      </div>
-                    </li>
-                    <li className="flex gap-4 items-start">
-                      <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0 text-[#007AFF] font-bold">2</div>
-                      <div>
-                        <h4 className="font-bold text-gray-900">No "Sleeping Members" Policy</h4>
-                        <p className="text-sm text-gray-500 mt-1">Inactivity for more than 14 days will result in immediate suspension.</p>
-                      </div>
-                    </li>
-                  </ul>
-
-                  <div className="pt-6 border-t border-gray-200">
-                    <div className="flex items-start gap-3 cursor-pointer" onClick={handleCheckboxClick}>
-                      {agreed ? <CheckSquare className="w-5 h-5 text-[#007AFF] shrink-0" /> : <Square className="w-5 h-5 text-gray-400 shrink-0" />}
-                      <p className="text-sm font-semibold text-gray-700 select-none">
-                        I have read and understood the rules. I am ready to take full responsibility.
-                      </p>
+                <ul className="space-y-4">
+                  <li className="flex gap-4 items-start">
+                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0 text-[#007AFF] font-bold">1</div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">Active Ground Participation</h4>
+                      <p className="text-sm text-gray-500 mt-1">You must actively participate in and organize regional meetings, protests, and social drives.</p>
                     </div>
-                  </div>
+                  </li>
+                  <li className="flex gap-4 items-start">
+                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0 text-[#007AFF] font-bold">2</div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">No "Sleeping Members" Policy</h4>
+                      <p className="text-sm text-gray-500 mt-1">Inactivity for more than 14 days will result in immediate suspension.</p>
+                    </div>
+                  </li>
+                </ul>
 
-                  <button 
-                    disabled={!agreed}
-                    onClick={() => {
-                      setShowChat(true);
-                    }}
-                    className="w-full py-4 bg-[#007AFF] text-white rounded-xl text-sm font-bold shadow-md hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:bg-gray-300 disabled:text-gray-500"
-                  >
-                    Proceed to Interview
-                  </button>
+                <div className="pt-6 border-t border-gray-200">
+                  <div className="flex items-start gap-3 cursor-pointer" onClick={handleCheckboxClick}>
+                    {agreed ? <CheckSquare className="w-5 h-5 text-[#007AFF] shrink-0" /> : <Square className="w-5 h-5 text-gray-400 shrink-0" />}
+                    <p className="text-sm font-semibold text-gray-700 select-none">
+                      I have read and understood the rules. I am ready to take full responsibility.
+                    </p>
+                  </div>
                 </div>
-              </motion.div>
-            </div>
+
+                <button 
+                  disabled={!agreed}
+                  onClick={() => setShowChat(true)}
+                  className="w-full py-4 bg-[#007AFF] text-white rounded-xl text-sm font-bold shadow-md hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:bg-gray-300 disabled:text-gray-500 shrink-0"
+                >
+                  Proceed to Interview
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

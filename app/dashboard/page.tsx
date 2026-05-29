@@ -1,13 +1,12 @@
 // app/dashboard/page.tsx
 "use client";
 
-import { ShieldCheck, MapPin, Eye, ArrowRight, Loader2 } from "lucide-react";
+import { ShieldCheck, MapPin, Eye, ArrowRight, Loader2, Bell, UserCircle } from "lucide-react";
 import Link from "next/link";
 import DigitalPass from "@/components/DigitalPass";
-import { useUser } from "@/hooks/useUser"; // 🔥 IMPORTING THE HOOK
+import { useUser } from "@/hooks/useUser"; 
 
 export default function CitizenDashboard() {
-  // 🔥 FETCHING REAL USER DATA
   const { userData, loadingUser } = useUser();
 
   if (loadingUser) {
@@ -31,7 +30,34 @@ export default function CitizenDashboard() {
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
       
-      {/* 1. STATUS BANNER (Dynamic Name & Location) */}
+      {/* WELCOME HEADER (Scrolls normally with page now) */}
+      <div className="flex items-center justify-between pb-4 border-b border-gray-200/60">
+        <div className="flex flex-col">
+          <h2 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">
+            Welcome back, {userData.name.split(" ")[0]}
+          </h2>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Secure Session Active</p>
+        </div>
+        
+        <div className="flex items-center gap-3 md:gap-5">
+          <button className="relative p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
+            <Bell className="w-5 h-5" />
+            <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+          </button>
+          <div className="hidden md:block w-px h-8 bg-gray-200"></div>
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-bold text-gray-900">Verified Member</p>
+              <p className="text-[10px] font-bold text-[#34C759] uppercase tracking-widest">Active Status</p>
+            </div>
+            <div className="w-10 h-10 bg-white rounded-full border border-gray-200 flex items-center justify-center shadow-sm">
+              <UserCircle className="w-6 h-6 text-gray-400" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 1. STATUS BANNER */}
       <div className="bg-gray-900 rounded-3xl p-8 md:p-10 text-white relative overflow-hidden shadow-xl">
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#007AFF]/20 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
         
@@ -40,7 +66,6 @@ export default function CitizenDashboard() {
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-xs font-bold tracking-widest uppercase border border-white/20 mb-6">
               <ShieldCheck className="w-3.5 h-3.5 text-[#34C759]" /> Verified Citizen
             </span>
-            {/* 🔥 DYNAMIC FIRST NAME */}
             <h1 className="text-3xl md:text-5xl font-black tracking-tight mb-4 leading-tight">
               Ready to create an impact, {userData.name.split(" ")[0]}?
             </h1>
@@ -55,7 +80,6 @@ export default function CitizenDashboard() {
             </div>
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Operating Region</p>
-              {/* 🔥 DYNAMIC DISTRICT & STATE */}
               <p className="font-bold text-white">{userData.district}, {userData.state}</p>
             </div>
           </div>
@@ -64,7 +88,6 @@ export default function CitizenDashboard() {
 
       {/* 2. GRID SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
         {/* LEFT COL: WATCHDOG PREVIEW */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
@@ -104,9 +127,7 @@ export default function CitizenDashboard() {
         <div className="space-y-6">
           <h3 className="text-lg font-black text-gray-900">Your Identity</h3>
           <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm flex flex-col items-center">
-            
             <div className="transform scale-90 origin-top">
-              {/* 🔥 DYNAMIC PASS IN SIDEBAR */}
               <DigitalPass 
                 name={userData.name}
                 state={userData.state}
@@ -114,7 +135,6 @@ export default function CitizenDashboard() {
                 memberId={userData.memberId || "PENDING"}
               />
             </div>
-            
             <Link 
               href="/dashboard/pass"
               className="mt-2 w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-900 font-bold text-sm text-center rounded-xl transition-colors border border-gray-200"
@@ -123,7 +143,6 @@ export default function CitizenDashboard() {
             </Link>
           </div>
         </div>
-
       </div>
     </div>
   );

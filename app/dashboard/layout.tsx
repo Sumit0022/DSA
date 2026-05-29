@@ -4,10 +4,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Shield, Eye, UserCircle, LogOut, Menu, X, Bell, Users } from "lucide-react";
+import { LayoutDashboard, Shield, Eye, UserCircle, LogOut, Menu, X, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getAuth, signOut } from "firebase/auth";
-import { useUser } from "@/hooks/useUser"; // 🔥 IMPORTING THE HOOK
+import { useUser } from "@/hooks/useUser";
 
 const citizenLinks = [
   { name: "My HQ", href: "/dashboard", icon: LayoutDashboard },
@@ -21,8 +21,6 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  // 🔥 FETCHING REAL USER DATA
   const { userData, loadingUser } = useUser();
 
   const handleLogout = async () => {
@@ -38,8 +36,8 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
       
-      {/* MOBILE HEADER */}
-      <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-white border-b border-gray-200 z-50 flex items-center justify-between px-4">
+      {/* MOBILE HEADER (Only Hamburger Menu) */}
+      <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-white border-b border-gray-200 z-50 flex items-center justify-between px-4 shadow-sm">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-[#007AFF] rounded-lg flex items-center justify-center">
             <Shield className="w-5 h-5 text-white" />
@@ -51,7 +49,7 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
         </button>
       </div>
 
-      {/* SIDEBAR (DESKTOP & MOBILE) */}
+      {/* SIDEBAR */}
       <AnimatePresence>
         {(isMobileMenuOpen || typeof window !== 'undefined' && window.innerWidth >= 768) && (
           <motion.div 
@@ -84,7 +82,6 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
                 <div className="flex items-center gap-3">
                   <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center">
                     <span className="text-[10px] text-gray-600">
-                      {/* Show First Initial dynamically */}
                       {loadingUser ? "" : userData ? userData.name.charAt(0) : "?"}
                     </span>
                   </div>
@@ -99,37 +96,6 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col min-w-0 md:mt-0 mt-16 overflow-hidden">
-        
-        {/* TOP HEADERBAR */}
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-8 z-30 shrink-0">
-          <div className="flex flex-col">
-            <h2 className="font-bold text-gray-900">
-              {/* Dynamic Welcome Message */}
-              {loadingUser ? "Loading..." : userData ? `Welcome back, ${userData.name.split(" ")[0]}` : "Welcome, Citizen"}
-            </h2>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden md:block">Secure Session Active</p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <button className="relative p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-            </button>
-            <div className="w-px h-8 bg-gray-200"></div>
-            <div className="flex items-center gap-3">
-              <div className="text-right hidden md:block">
-                {/* Dynamic Status Dropdown Logic could go here, keeping it static for visual structure */}
-                <p className="text-sm font-bold text-gray-900">Verified Member</p>
-                <p className="text-[10px] font-bold text-[#34C759] uppercase tracking-widest">Active Status</p>
-              </div>
-              <div className="w-10 h-10 bg-gray-100 rounded-full border border-gray-200 flex items-center justify-center shadow-sm">
-                <UserCircle className="w-6 h-6 text-gray-400" />
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* DYNAMIC PAGE CONTENT SCROLL AREA */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 relative">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.02] pointer-events-none"></div>
           <div className="relative z-10">

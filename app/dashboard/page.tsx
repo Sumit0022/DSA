@@ -5,9 +5,42 @@ import { ShieldCheck, MapPin, Eye, ArrowRight, Loader2, Bell, UserCircle } from 
 import Link from "next/link";
 import DigitalPass from "@/components/DigitalPass";
 import { useUser } from "@/hooks/useUser"; 
+import { useState, useEffect } from "react";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export default function CitizenDashboard() {
   const { userData, loadingUser } = useUser();
+  const [recentWatchdogs, setRecentWatchdogs] = useState<any[]>([]);
+  const [loadingWatchdogs, setLoadingWatchdogs] = useState(true);
+
+  useEffect(() => {
+    const fetchWatchdogs = async () => {
+      try {
+        // Fetch all posts ordered by newest first
+        const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+        const querySnapshot = await getDocs(q);
+        const posts: any[] = [];
+        
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          // JS Level Filter to avoid Firebase Composite Index errors
+          if (data.type === "watchdog" && data.status === "Published") {
+            posts.push({ id: doc.id, ...data });
+          }
+        });
+        
+        // Only keep the latest 3
+        setRecentWatchdogs(posts.slice(0, 3));
+      } catch (error) {
+        console.error("Error fetching watchdogs", error);
+      } finally {
+        setLoadingWatchdogs(false);
+      }
+    };
+    
+    fetchWatchdogs();
+  }, []);
 
   if (loadingUser) {
     return (
@@ -105,32 +138,33 @@ export default function CitizenDashboard() {
             </div>
             
             <div className="space-y-3 md:space-y-4">
-              <Link href="#" className="block p-4 rounded-xl md:rounded-2xl bg-gray-50 border border-gray-100 hover:border-gray-200 hover:bg-gray-100 transition-all group">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Education • Today</p>
-                <div className="flex items-start justify-between gap-4">
-                  <h5 className="font-bold text-gray-900 text-sm md:text-base leading-snug">The Need for Educational Reform in UP</h5>
-                  <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-900 transition-colors shrink-0 mt-0.5" />
-                </div>
-              </Link>
-              
-              <Link href="#" className="block p-4 rounded-xl md:rounded-2xl bg-gray-50 border border-gray-100 hover:border-gray-200 hover:bg-gray-100 transition-all group">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Health • 2 Days Ago</p>
-                <div className="flex items-start justify-between gap-4">
-                  <h5 className="font-bold text-gray-900 text-sm md:text-base leading-snug">Healthcare Budget Cuts Exposed</h5>
-                  <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-900 transition-colors shrink-0 mt-0.5" />
-                </div>
-              </Link>
+              {loadingWatchdogs ? (
+                 <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#007AFF]" /></div>
+              ) : recentWatchdogs.length === 0 ? (
+                 <div className="py-8 text-center text-sm text-gray-500">No recent watchdog alerts published yet.</div>
+              ) : (
+                recentWatchdogs.map((post) => (
+                  <Link key={post.id} href={`/dashboard/watchdog/${post.id}`} className="block p-4 rounded-xl md:rounded-2xl bg-gray-50 border border-gray-100 hover:border-gray-200 hover:bg-gray-100 transition-all group">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
+                      Alert • {post.createdAt ? new Date(post.createdAt.toDate()).toLocaleDateString() : "Recent"}
+                    </p>
+                    <div className="flex items-start justify-between gap-4">
+                      <h5 className="font-bold text-gray-900 text-sm md:text-base leading-snug line-clamp-2">{post.title}</h5>
+                      <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-900 transition-colors shrink-0 mt-0.5" />
+                    </div>
+                  </Link>
+                ))
+              )}
             </div>
           </div>
         </div>
 
-        {/* RIGHT COL: QUICK IDENTITY FIX */}
+        {/* RIGHT COL: QUICK IDENTITY */}
         <div className="space-y-4 md:space-y-6">
           <h3 className="text-lg font-black text-gray-900">Your Identity</h3>
           <div className="bg-white border border-gray-200 rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-sm flex flex-col items-center overflow-hidden">
             
             <div className="w-full flex justify-center py-2">
-              {/* FIXED UI: w-[380px] shrink-0 prevents text from squishing. Negative margins clean up extra space */}
               <div className="w-[380px] shrink-0 flex justify-center transform origin-top scale-[0.75] sm:scale-[0.85] md:scale-100 lg:scale-[0.70] xl:scale-[0.85] transition-transform duration-300 ease-in-out -mb-[80px] sm:-mb-[30px] md:mb-0 lg:-mb-[100px] xl:-mb-[50px]">
                 <DigitalPass 
                   name={userData.name}

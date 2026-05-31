@@ -30,7 +30,7 @@ export default function CitizenDashboard() {
   return (
     <div className="max-w-6xl mx-auto space-y-6 md:space-y-8 pb-12">
       
-      {/* WELCOME HEADER (Scrolls normally) */}
+      {/* WELCOME HEADER */}
       <div className="flex items-center justify-between pb-4 border-b border-gray-200/60">
         <div className="flex flex-col">
           <h2 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">
@@ -124,14 +124,14 @@ export default function CitizenDashboard() {
           </div>
         </div>
 
-        {/* RIGHT COL: QUICK IDENTITY */}
+        {/* RIGHT COL: QUICK IDENTITY FIX */}
         <div className="space-y-4 md:space-y-6">
           <h3 className="text-lg font-black text-gray-900">Your Identity</h3>
-          <div className="bg-white border border-gray-200 rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-sm flex flex-col items-center">
+          <div className="bg-white border border-gray-200 rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-sm flex flex-col items-center overflow-hidden">
             
-            {/* MOBILE SCALING FIX: Wrapper added to prevent horizontal overflow */}
-            <div className="w-full flex justify-center overflow-hidden py-2">
-              <div className="transform scale-[0.80] sm:scale-90 md:scale-100 origin-top">
+            <div className="w-full flex justify-center py-2">
+              {/* FIXED UI: w-[380px] shrink-0 prevents text from squishing. Negative margins clean up extra space */}
+              <div className="w-[380px] shrink-0 flex justify-center transform origin-top scale-[0.75] sm:scale-[0.85] md:scale-100 lg:scale-[0.70] xl:scale-[0.85] transition-transform duration-300 ease-in-out -mb-[80px] sm:-mb-[30px] md:mb-0 lg:-mb-[100px] xl:-mb-[50px]">
                 <DigitalPass 
                   name={userData.name}
                   state={userData.state}
@@ -143,12 +143,13 @@ export default function CitizenDashboard() {
             
             <Link 
               href="/dashboard/pass"
-              className="mt-4 md:mt-2 w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-900 font-bold text-sm text-center rounded-xl transition-colors border border-gray-200 shadow-sm"
+              className="mt-4 md:mt-2 w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-900 font-bold text-sm text-center rounded-xl transition-colors border border-gray-200 shadow-sm relative z-10"
             >
               View Full Details
             </Link>
           </div>
         </div>
+
       </div>
     </div>
   );

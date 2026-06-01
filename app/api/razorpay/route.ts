@@ -10,13 +10,28 @@ const razorpay = new Razorpay({
 
 export async function POST(request: Request) {
   try {
-    // ₹20 fee (Razorpay paise mein calculate karta hai, so 20 * 100 = 2000 paise)
-    const amount = 2000; 
+    // Safely parse the request body
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch (e) {
+      // Body might be empty in the old join implementation
+    }
+
+    // DYNAMIC LOGIC: 
+    // Agar body mein amount aaya hai (Donation) -> Convert to paise
+    // Agar nahi aaya (Old Registration) -> Default ₹20 (2000 paise)
+    let amountInPaise = 2000; 
+    
+    if (body && body.amount) {
+      amountInPaise = body.amount * 100;
+    }
+
     const currency = "INR";
 
     // Razorpay par ek order create karne ki request
     const options = {
-      amount: amount,
+      amount: amountInPaise,
       currency: currency,
       receipt: `receipt_${Date.now()}`,
       payment_capture: 1, // Auto capture payment
@@ -25,8 +40,10 @@ export async function POST(request: Request) {
     const order = await razorpay.orders.create(options);
 
     // Frontend ko securely Order ID aur details bhej rahe hain
+    // Naye donation page ko 'orderId' aur purane page ko 'id' chahiye, hum dono bhej denge taaki kuch break na ho.
     return NextResponse.json({
       id: order.id,
+      orderId: order.id,
       currency: order.currency,
       amount: order.amount,
     }, { status: 200 });

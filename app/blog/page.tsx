@@ -1,186 +1,424 @@
-// app/blog/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { Search, Calendar, User, ArrowRight, Loader2, BookOpen, Newspaper } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  Search, Calendar, User, ArrowRight, Loader2,
+  BookOpen, Newspaper, ArrowUpRight,
+  Clock, TrendingUp, ChevronRight
+} from "lucide-react";
 import Link from "next/link";
 import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+
+function useInView(threshold = 0.15) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVisible(true); obs.disconnect(); } }, { threshold });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  return { ref, visible };
+}
+
+function Counter({ to, label }: { to: number; label: string }) {
+  const [count, setCount] = useState(0);
+  const { ref, visible } = useInView();
+  useEffect(() => {
+    if (!visible) return;
+    let start = 0;
+    const step = Math.ceil(to / 40);
+    const id = setInterval(() => {
+      start += step;
+      if (start >= to) { setCount(to); clearInterval(id); }
+      else setCount(start);
+    }, 30);
+    return () => clearInterval(id);
+  }, [visible, to]);
+  return (
+    <div ref={ref} className="stat-pill">
+      <span className="stat-number">{count}</span>
+      <span className="stat-label">{label}</span>
+    </div>
+  );
+}
+
+function HeroCard({ post }: { post: any }) {
+  const { ref, visible } = useInView(0.1);
+  return (
+    <div ref={ref} className={`hero-card ${visible ? "fade-up" : "pre-anim"}`}>
+      <div className="hero-inner">
+        {post.coverImage && (
+          <div className="hero-img-wrap">
+            <img src={post.coverImage} alt={post.title} className="hero-img" />
+            <div className="hero-img-overlay" />
+            <span className="hero-badge">
+              <TrendingUp size={11} /> Lead Story
+            </span>
+          </div>
+        )}
+        <div className="hero-body">
+          <div className="hero-meta">
+            <span className="meta-chip"><User size={11} /> {post.author}</span>
+            <span className="meta-chip"><Clock size={11} /> {new Date(post.createdAt.toDate()).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
+          </div>
+          <Link href={`/blog/${post.id}`} className="hero-title-link">
+            <h2 className="hero-title">{post.title}</h2>
+          </Link>
+          <p className="hero-excerpt">{post.content.slice(0, 380)}…</p>
+          <Link href={`/blog/${post.id}`} className="cta-btn">
+            Read Full Article <ArrowUpRight size={15} />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SecCard({ post, delay = 0 }: { post: any; delay?: number }) {
+  const { ref, visible } = useInView(0.1);
+  return (
+    <div ref={ref} className={`sec-card ${visible ? "fade-up" : "pre-anim"}`} style={{ transitionDelay: `${delay}ms` }}>
+      <div className="sec-num">{String(delay / 80 + 1).padStart(2, "0")}</div>
+      <div className="sec-body">
+        <div className="sec-date"><Calendar size={10} /> {new Date(post.createdAt.toDate()).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</div>
+        <Link href={`/blog/${post.id}`}>
+          <h4 className="sec-title">{post.title}</h4>
+        </Link>
+        <p className="sec-excerpt">{post.content.slice(0, 100)}…</p>
+        <Link href={`/blog/${post.id}`} className="sec-link">
+          Read <ChevronRight size={12} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function RegCard({ post, delay = 0 }: { post: any; delay?: number }) {
+  const { ref, visible } = useInView(0.05);
+  return (
+    <div ref={ref} className={`reg-card ${visible ? "fade-up" : "pre-anim"}`} style={{ transitionDelay: `${delay}ms` }}>
+      {post.coverImage && (
+        <div className="reg-img-wrap">
+          <img src={post.coverImage} alt={post.title} className="reg-img" />
+        </div>
+      )}
+      <div className="reg-body">
+        <p className="reg-date"><Clock size={10} /> {new Date(post.createdAt.toDate()).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+        <Link href={`/blog/${post.id}`}>
+          <h4 className="reg-title">{post.title}</h4>
+        </Link>
+        <p className="reg-excerpt">{post.content.slice(0, 120)}…</p>
+        <Link href={`/blog/${post.id}`} className="reg-cta">
+          Read Piece <ArrowRight size={12} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+const STYLES = `
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  .chronicle-root {
+    background: #f5f3ee;
+    min-height: 100svh;
+    font-family: 'Georgia', serif;
+    color: #1a1814;
+  }
+  .page-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* Masthead */
+  .masthead { padding: 3.5rem 0 2rem; text-align: center; position: relative; }
+  .masthead::before {
+    content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 1px; height: 40px; background: linear-gradient(to bottom, transparent, #1a1814);
+  }
+  .masthead-kicker {
+    font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.25em;
+    text-transform: uppercase; color: #8a7e6a; margin-bottom: 1.25rem;
+  }
+  .masthead-title {
+    font-family: 'Georgia', serif; font-size: clamp(2.8rem, 7vw, 5.5rem);
+    font-weight: 700; line-height: 0.92; letter-spacing: -0.03em;
+    color: #1a1814; margin-bottom: 1.5rem;
+  }
+  .masthead-title em { font-style: italic; color: #c0392b; }
+  .masthead-rule {
+    display: flex; align-items: center; gap: 1rem; margin: 0 auto 1.25rem; max-width: 640px;
+  }
+  .masthead-rule-line { flex: 1; height: 1px; background: #1a1814; }
+  .masthead-rule-thick { height: 3px; background: #1a1814; width: 60px; }
+  .masthead-rule-dot { width: 5px; height: 5px; border-radius: 50%; background: #c0392b; flex-shrink: 0; }
+  .masthead-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: #8a7e6a;
+    padding: 0.75rem 0;
+    border-top: 0.5px solid #c9c3b5; border-bottom: 0.5px solid #c9c3b5;
+    flex-wrap: wrap; gap: 0.5rem;
+  }
+
+  /* Stats */
+  .stats-bar { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; margin: 2rem 0; }
+  .stat-pill {
+    display: flex; align-items: baseline; gap: 0.4rem;
+    background: white; border: 0.5px solid #ddd8ce; border-radius: 100px;
+    padding: 0.45rem 1.1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .stat-number { font-family: 'Courier New', monospace; font-size: 1rem; font-weight: 700; color: #1a1814; }
+  .stat-label { font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #8a7e6a; }
+
+  /* Ticker */
+  .ticker-wrap {
+    overflow: hidden; border-top: 0.5px solid #c9c3b5; border-bottom: 0.5px solid #c9c3b5;
+    padding: 0.55rem 0; margin-bottom: 2.5rem; background: white;
+  }
+  .ticker-inner {
+    display: flex; gap: 3rem; animation: ticker-scroll 28s linear infinite;
+    white-space: nowrap; width: max-content;
+  }
+  .ticker-wrap:hover .ticker-inner { animation-play-state: paused; }
+  @keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+  .ticker-item {
+    font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.15em;
+    text-transform: uppercase; color: #8a7e6a; display: flex; align-items: center; gap: 0.6rem;
+  }
+  .ticker-dot { width: 4px; height: 4px; background: #c0392b; border-radius: 50%; }
+
+  /* Search */
+  .search-wrap { position: relative; max-width: 520px; margin: 0 auto 3rem; }
+  .search-icon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: #8a7e6a; pointer-events: none; transition: color 0.2s; }
+  .search-wrap.focused .search-icon { color: #c0392b; }
+  .search-input {
+    width: 100%; padding: 0.85rem 1rem 0.85rem 2.75rem;
+    background: white; border: 1px solid #ddd8ce; border-radius: 12px;
+    font-family: 'Courier New', monospace; font-size: 13px; color: #1a1814; outline: none;
+    transition: border-color 0.25s, box-shadow 0.25s; letter-spacing: 0.05em;
+  }
+  .search-input::placeholder { color: #b0a898; }
+  .search-input:focus { border-color: #1a1814; box-shadow: 0 0 0 3px rgba(26,24,20,0.07); }
+
+  /* Section label */
+  .section-label { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.75rem; }
+  .section-label-text {
+    font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.25em;
+    text-transform: uppercase; color: #8a7e6a; white-space: nowrap;
+  }
+  .section-label-line { flex: 1; height: 0.5px; background: #c9c3b5; }
+
+  /* Main grid */
+  .main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 2.5rem; margin-bottom: 4rem; align-items: start; }
+  @media (max-width: 900px) { .main-grid { grid-template-columns: 1fr; } }
+
+  /* Hero */
+  .hero-card { background: white; border-radius: 20px; border: 0.5px solid #ddd8ce; overflow: hidden; transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), box-shadow 0.35s; }
+  .hero-card:hover { transform: translateY(-4px); box-shadow: 0 20px 60px rgba(0,0,0,0.1); }
+  .hero-inner { display: flex; flex-direction: column; }
+  .hero-img-wrap { position: relative; width: 100%; height: 340px; overflow: hidden; }
+  .hero-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.7s cubic-bezier(0.22,1,0.36,1); }
+  .hero-card:hover .hero-img { transform: scale(1.04); }
+  .hero-img-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 40%, rgba(26,24,20,0.35)); }
+  .hero-badge {
+    position: absolute; top: 1rem; left: 1rem; background: #c0392b; color: white;
+    font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; padding: 0.3rem 0.75rem; border-radius: 100px;
+    display: flex; align-items: center; gap: 0.35rem;
+  }
+  .hero-body { padding: 2rem 2.25rem 2.25rem; }
+  .hero-meta { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .meta-chip { display: flex; align-items: center; gap: 0.3rem; font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: #8a7e6a; }
+  .hero-title-link { text-decoration: none; }
+  .hero-title { font-family: 'Georgia', serif; font-size: clamp(1.5rem, 3.5vw, 2.2rem); font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; color: #1a1814; margin-bottom: 1rem; transition: color 0.2s; }
+  .hero-title-link:hover .hero-title { color: #c0392b; }
+  .hero-excerpt { font-size: 0.95rem; line-height: 1.75; color: #5a5245; margin-bottom: 1.5rem; }
+  .cta-btn { display: inline-flex; align-items: center; gap: 0.4rem; background: #1a1814; color: white; text-decoration: none; font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; padding: 0.7rem 1.35rem; border-radius: 100px; transition: background 0.2s, transform 0.2s; }
+  .cta-btn:hover { background: #c0392b; transform: scale(1.03); }
+
+  /* Sidebar */
+  .sidebar { display: flex; flex-direction: column; gap: 0; }
+  .sidebar-head { font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase; color: #8a7e6a; padding-bottom: 0.75rem; border-bottom: 1.5px solid #1a1814; margin-bottom: 0; }
+  .sec-card { display: flex; gap: 1.1rem; padding: 1.25rem 0; border-bottom: 0.5px solid #ddd8ce; }
+  .sec-card:last-child { border-bottom: none; }
+  .sec-num { font-family: 'Courier New', monospace; font-size: 1.4rem; font-weight: 700; color: #ddd8ce; line-height: 1; flex-shrink: 0; padding-top: 2px; min-width: 32px; transition: color 0.2s; }
+  .sec-card:hover .sec-num { color: #c0392b; }
+  .sec-body { flex: 1; }
+  .sec-date { display: flex; align-items: center; gap: 0.3rem; font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: #b0a898; margin-bottom: 0.4rem; }
+  .sec-title { font-family: 'Georgia', serif; font-size: 1rem; font-weight: 700; line-height: 1.35; color: #1a1814; margin-bottom: 0.45rem; text-decoration: none; transition: color 0.2s; display: block; }
+  a:hover .sec-title { color: #c0392b; }
+  .sec-excerpt { font-size: 0.78rem; line-height: 1.6; color: #7a6e5e; margin-bottom: 0.6rem; }
+  .sec-link { display: inline-flex; align-items: center; gap: 0.2rem; font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: #c0392b; text-decoration: none; font-weight: 700; transition: gap 0.2s; }
+  .sec-link:hover { gap: 0.4rem; }
+
+  /* Regular grid */
+  .reg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+  .reg-card { background: white; border-radius: 16px; border: 0.5px solid #ddd8ce; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s; }
+  .reg-card:hover { transform: translateY(-3px); box-shadow: 0 12px 36px rgba(0,0,0,0.08); }
+  .reg-img-wrap { height: 160px; overflow: hidden; }
+  .reg-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s cubic-bezier(0.22,1,0.36,1); }
+  .reg-card:hover .reg-img { transform: scale(1.05); }
+  .reg-body { padding: 1.25rem 1.35rem 1.4rem; flex: 1; display: flex; flex-direction: column; }
+  .reg-date { display: flex; align-items: center; gap: 0.3rem; font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: #b0a898; margin-bottom: 0.55rem; }
+  .reg-title { font-family: 'Georgia', serif; font-size: 1.05rem; font-weight: 700; line-height: 1.35; color: #1a1814; margin-bottom: 0.6rem; transition: color 0.2s; text-decoration: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  a:hover .reg-title { color: #c0392b; }
+  .reg-excerpt { font-size: 0.8rem; line-height: 1.65; color: #7a6e5e; flex: 1; margin-bottom: 1rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .reg-cta { display: inline-flex; align-items: center; gap: 0.3rem; font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: #c0392b; text-decoration: none; font-weight: 700; transition: gap 0.2s; }
+  .reg-cta:hover { gap: 0.5rem; }
+
+  /* States */
+  .loader-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8rem 0; gap: 1rem; color: #8a7e6a; }
+  .loader-text { font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; }
+  .empty-state { text-align: center; padding: 6rem 2rem; border: 1px dashed #c9c3b5; border-radius: 20px; background: white; }
+  .empty-icon { color: #c9c3b5; margin: 0 auto 1.25rem; display: block; }
+  .empty-title { font-family: 'Georgia', serif; font-size: 1.4rem; font-weight: 700; color: #1a1814; margin-bottom: 0.5rem; }
+  .empty-sub { font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.1em; color: #b0a898; }
+
+  /* Animations */
+  .pre-anim { opacity: 0; transform: translateY(28px); }
+  .fade-up { opacity: 1; transform: translateY(0); transition: opacity 0.65s cubic-bezier(0.22,1,0.36,1), transform 0.65s cubic-bezier(0.22,1,0.36,1); }
+`;
 
 export default function PublicNewspaperBlog() {
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
     const fetchPublicBlogs = async () => {
       try {
         const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
-        const querySnapshot = await getDocs(q);
-        const fetchedBlogs: any[] = [];
-        
-        querySnapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          // Filter out only Published Articles (Not Watchdogs, Not Drafts)
-          if (data.type === "blog" && data.status === "Published") {
-            fetchedBlogs.push({ id: docSnap.id, ...data });
-          }
+        const snap = await getDocs(q);
+        const arr: any[] = [];
+        snap.forEach((d) => {
+          const data = d.data();
+          if (data.type === "blog" && data.status === "Published") arr.push({ id: d.id, ...data });
         });
-        
-        setPosts(fetchedBlogs);
-      } catch (error) {
-        console.error("Error fetching public blogs:", error);
-      } finally {
-        setLoading(false);
-      }
+        setPosts(arr);
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
     };
-    
     fetchPublicBlogs();
   }, []);
 
-  const filteredPosts = posts.filter(post => 
-    post.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    post.content?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filtered = posts.filter(p =>
+    p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.content?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  // Split data for Newspaper Layout hierarchy
-  const heroPost = filteredPosts[0];
-  const secondaryPosts = filteredPosts.slice(1, 4);
-  const regularPosts = filteredPosts.slice(4);
+  const hero = filtered[0];
+  const secondary = filtered.slice(1, 4);
+  const regular = filtered.slice(4);
 
   return (
-    <div className="bg-[#fcfbf7] min-h-screen text-gray-900 selection:bg-yellow-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* NEWSPAPER MAIN MASTHEAD HEADER */}
-        <header className="text-center border-b-4 border-double border-gray-900 pb-6 mb-8">
-          <p className="text-[10px] sm:text-xs font-serif font-bold uppercase tracking-widest text-gray-500 mb-2">
-            The Official Public Journal of the Democratic Social Alliance
-          </p>
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-serif font-black tracking-tight uppercase text-gray-900 border-y border-gray-900 py-3 my-2">
-            The Citizen Chronicle
-          </h1>
-          <div className="flex flex-col sm:flex-row justify-between items-center text-xs font-serif font-bold text-gray-600 px-2 mt-2 gap-2">
-            <span className="uppercase">Volume I • Issue IV</span>
-            <span className="uppercase">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
-            <span className="uppercase">Price: Free Speech</span>
-          </div>
-        </header>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: STYLES }} />
+      <div className="chronicle-root">
+        <div className="page-wrap">
 
-        {/* SEARCH BAR BAR */}
-        <div className="relative max-w-xl mx-auto mb-10">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Search chronicles, essays & opinions..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white border-2 border-gray-900 rounded-xl text-sm outline-none font-medium focus:ring-4 focus:ring-gray-900/5 transition-all"
-          />
-        </div>
+          <header className="masthead">
+            <p className="masthead-kicker">The Official Public Journal of the Democratic Social Alliance</p>
+            <h1 className="masthead-title">The Citizen <em>Chronicle</em></h1>
+            <div className="masthead-rule">
+              <div className="masthead-rule-line" />
+              <div className="masthead-rule-dot" />
+              <div className="masthead-rule-thick" />
+              <div className="masthead-rule-dot" />
+              <div className="masthead-rule-line" />
+            </div>
+            <div className="masthead-meta">
+              <span>Volume I · Issue IV</span>
+              <span>{new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</span>
+              <span>Price: Free Speech</span>
+            </div>
+          </header>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-24 text-gray-400">
-            <Loader2 className="w-8 h-8 animate-spin mb-3 text-gray-900" />
-            <p className="font-serif font-bold text-sm">Typesetting columns...</p>
+          {!loading && (
+            <div className="stats-bar">
+              <Counter to={posts.length} label="Published" />
+              <Counter to={Math.max(secondary.length + 1, 1)} label="This Week" />
+              <Counter to={Math.max(1, Math.ceil(posts.length / 3))} label="Editions" />
+            </div>
+          )}
+
+          {!loading && filtered.length > 0 && (
+            <div className="ticker-wrap">
+              <div className="ticker-inner">
+                {[...filtered, ...filtered].map((p, i) => (
+                  <span key={i} className="ticker-item">
+                    <span className="ticker-dot" /> {p.title}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className={`search-wrap ${focused ? "focused" : ""}`}>
+            <Search className="search-icon" size={15} />
+            <input
+              type="text"
+              placeholder="Search chronicles, essays & opinions..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              className="search-input"
+            />
           </div>
-        ) : filteredPosts.length === 0 ? (
-          <div className="bg-white border-2 border-dashed border-gray-300 rounded-3xl p-12 text-center max-w-md mx-auto">
-            <Newspaper className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="font-serif font-black text-xl">No Articles Found</h3>
-            <p className="text-sm text-gray-500 mt-2">The presses haven't rolled out any publications matching this criteria yet.</p>
-          </div>
-        ) : (
-          <div className="space-y-10">
-            
-            {/* FRONT PAGE: DYNAMIC NEWSPAPER GRID */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 border-b border-gray-300 pb-10">
-              
-              {/* MAIN HERO HEADLINE COLUMN (Col span 2) */}
-              {heroPost && (
-                <div className="lg:col-span-2 space-y-4 border-b lg:border-b-0 lg:border-r border-gray-200 pb-8 lg:pb-0 lg:pr-8">
-                  {heroPost.coverImage && (
-                    <div className="w-full h-64 sm:h-96 bg-gray-100 border border-gray-900 overflow-hidden rounded-xl">
-                      <img src={heroPost.coverImage} alt={heroPost.title} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" />
-                    </div>
-                  )}
-                  <div className="space-y-3">
-                    <Link href={`/blog/${heroPost.id}`} className="block group">
-                      <h2 className="text-2xl sm:text-4xl font-serif font-black text-gray-900 leading-tight group-hover:text-[#007AFF] transition-colors decoration-gray-900 group-hover:underline">
-                        {heroPost.title}
-                      </h2>
-                    </Link>
-                    <div className="flex items-center gap-4 text-xs font-serif font-bold text-gray-500">
-                      <span className="flex items-center gap-1"><User className="w-3.5 h-3.5"/> By {heroPost.author}</span>
-                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5"/> {new Date(heroPost.createdAt.toDate()).toLocaleDateString()}</span>
-                    </div>
-                    <p className="text-gray-700 text-base leading-relaxed font-serif first-letter:text-5xl first-letter:font-black first-letter:float-left first-letter:mr-2 first-letter:text-gray-900">
-                      {heroPost.content.slice(0, 450)}...
-                    </p>
-                    <Link href={`/blog/${heroPost.id}`} className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-[#007AFF] hover:underline pt-2">
-                      Read Full Front Page Article <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
+
+          {loading ? (
+            <div className="loader-wrap">
+              <Loader2 size={28} style={{ color: "#1a1814", animation: "spin 1s linear infinite" }} />
+              <p className="loader-text">Typesetting columns…</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="empty-state">
+              <Newspaper className="empty-icon" size={40} />
+              <h3 className="empty-title">No Articles Found</h3>
+              <p className="empty-sub">The presses haven't rolled out any matching publications yet.</p>
+            </div>
+          ) : (
+            <>
+              <div className="section-label">
+                <span className="section-label-text">Front Page</span>
+                <div className="section-label-line" />
+              </div>
+
+              <div className="main-grid">
+                {hero && <HeroCard post={hero} />}
+                <aside className="sidebar">
+                  <p className="sidebar-head">
+                    <BookOpen size={11} style={{ display: "inline", marginRight: 5, verticalAlign: "middle" }} />
+                    Editorial Panels
+                  </p>
+                  {secondary.length === 0
+                    ? <p style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: "#b0a898", paddingTop: "1rem", letterSpacing: "0.1em" }}>No adjacent columns available.</p>
+                    : secondary.map((p, i) => <SecCard key={p.id} post={p} delay={i * 80} />)
+                  }
+                </aside>
+              </div>
+
+              {regular.length > 0 && (
+                <div>
+                  <div className="section-label">
+                    <span className="section-label-text">More Chronicles</span>
+                    <div className="section-label-line" />
+                  </div>
+                  <div className="reg-grid">
+                    {regular.map((p, i) => <RegCard key={p.id} post={p} delay={i * 60} />)}
                   </div>
                 </div>
               )}
+            </>
+          )}
 
-              {/* SECONDARY SIDE COLUMN (Col span 1) */}
-              <div className="space-y-6">
-                <h3 className="font-serif font-black text-lg uppercase tracking-wide border-b-2 border-gray-900 pb-1.5 mb-4 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-gray-600" /> Editorial Panels
-                </h3>
-                
-                {secondaryPosts.length === 0 ? (
-                  <p className="text-xs font-serif italic text-gray-400">No adjacent columns available.</p>
-                ) : (
-                  secondaryPosts.map((post) => (
-                    <div key={post.id} className="space-y-2 border-b border-gray-200 pb-5 last:border-0 last:pb-0 group">
-                      <Link href={`/blog/${post.id}`}>
-                        <h4 className="font-serif font-black text-lg text-gray-900 group-hover:text-[#007AFF] leading-snug transition-colors">
-                          {post.title}
-                        </h4>
-                      </Link>
-                      <div className="flex items-center gap-3 text-[11px] font-serif text-gray-400">
-                        <span>{new Date(post.createdAt.toDate()).toLocaleDateString()}</span>
-                      </div>
-                      <p className="text-xs text-gray-600 font-serif line-clamp-3 leading-relaxed">
-                        {post.content}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-
-            </div>
-
-            {/* LOWER COLS: REGULAR ARCHIVE GRID */}
-            {regularPosts.length > 0 && (
-              <div className="space-y-6">
-                <h3 className="font-serif font-black text-xl uppercase border-b-2 border-gray-900 pb-2">More Chronicles</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {regularPosts.map((post) => (
-                    <div key={post.id} className="bg-white border border-gray-200 p-5 rounded-2xl shadow-sm flex flex-col justify-between hover:border-gray-400 transition-all group">
-                      <div className="space-y-3">
-                        <Link href={`/blog/${post.id}`}>
-                          <h4 className="font-serif font-black text-lg text-gray-900 group-hover:text-[#007AFF] leading-tight transition-colors line-clamp-2">
-                            {post.title}
-                          </h4>
-                        </Link>
-                        <p className="text-xs text-gray-500 font-serif">{new Date(post.createdAt.toDate()).toLocaleDateString()}</p>
-                        <p className="text-xs text-gray-600 font-serif line-clamp-3 leading-relaxed">{post.content}</p>
-                      </div>
-                      <Link href={`/blog/${post.id}`} className="text-xs font-bold text-[#007AFF] hover:underline mt-4 inline-flex items-center gap-1">
-                        Read Piece <ArrowRight className="w-3 h-3"/>
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-          </div>
-        )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

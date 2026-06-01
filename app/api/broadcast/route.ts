@@ -2,21 +2,28 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(req: Request) {
   try {
+    // 1. Check if API key exists (Prevents silent failures)
+    if (!process.env.RESEND_API_KEY) {
+      console.error("RESEND_API_KEY is missing in Environment Variables");
+      return NextResponse.json({ error: "Server configuration error. API Key missing." }, { status: 500 });
+    }
+
+    // 2. Initialize Resend INSIDE the function so it doesn't crash the Vercel build process
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    
     const { subject, message, emails } = await req.json();
 
     if (!emails || emails.length === 0) {
       return NextResponse.json({ error: "No recipients found." }, { status: 400 });
     }
 
-    // Sending email using Resend
+    // 3. Send email using Resend
     const { data, error } = await resend.emails.send({
-      from: 'DSA Headquarters <onboarding@resend.dev>', // Resend ka default testing email
-      to: ['delivered@resend.dev'], // Dummy TO address
-      bcc: emails, // Saare actual members ko BCC mein rakhenge taaki ek dusre ka email na dikhe
+      from: 'DSA Headquarters <onboarding@resend.dev>', // Keep this as onboarding@resend.dev for the free tier
+      to: ['delivered@resend.dev'], // Required by Resend
+      bcc: emails, // Actual members get it in BCC
       subject: subject,
       html: `
         <div style="font-family: sans-serif; padding: 20px; color: #333; max-w: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px;">
@@ -34,6 +41,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
+    console.error("Broadcast API Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

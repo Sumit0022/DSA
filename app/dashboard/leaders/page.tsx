@@ -74,7 +74,7 @@ export default function LocalLeadersPage() {
     });
 
     return () => unsubscribeSettings();
-  }, [userData, userDistrict, userState]);
+  }, [userData?.id, userDistrict, userState]);
 
   // SYNC APPLICATION
   useEffect(() => {

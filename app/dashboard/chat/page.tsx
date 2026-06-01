@@ -41,7 +41,7 @@ export default function ApplicationChatPage() {
       setIsLoadingChat(false);
     });
     return () => unsubscribe();
-  }, [currentUser, router]);
+  }, [currentUser?.id, router]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });

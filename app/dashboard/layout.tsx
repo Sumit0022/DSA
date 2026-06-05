@@ -8,11 +8,14 @@ import { LayoutDashboard, Shield, Eye, UserCircle, LogOut, Menu, X, Users } from
 import { motion, AnimatePresence } from "framer-motion";
 import { getAuth, signOut } from "firebase/auth";
 import { useUser } from "@/hooks/useUser";
-import { HeartHandshake } from "lucide-react";
+import { HeartHandshake} from "lucide-react";
+import { Calendar} from "lucide-react";
+import { ClipboardList } from "lucide-react";
 
 const citizenLinks = [
   { name: "My HQ", href: "/dashboard", icon: LayoutDashboard },
   { name: "Freedom Pass", href: "/dashboard/pass", icon: Shield },
+  { name: "Meetings", href: "/dashboard/meetings", icon: Calendar },
   { name: "Watchdog Feed", href: "/dashboard/watchdog", icon: Eye },
   { name: "Local Leaders", href: "/dashboard/leaders", icon: Users },
   { name: "Donate", href: "/dashboard/donate", icon: HeartHandshake },
@@ -117,6 +120,17 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
                   </Link>
                 );
               })}
+              {userData?.role && (
+            <Link 
+              href="/dashboard/workspace" 
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 rounded-xl font-black transition-all border border-[#007AFF]/20"
+            >
+              <ClipboardList className="w-5 h-5" />
+              Leader Workspace
+            </Link>
+          )}
+
             </div>
 
             {/* User Area / Logout */}
@@ -166,6 +180,16 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
               </Link>
             );
           })}
+          {userData?.role && (
+          <Link 
+            href="/dashboard/workspace" 
+            className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 rounded-xl font-black transition-all border border-[#007AFF]/20"
+          >
+            <ClipboardList className="w-5 h-5" />
+            Leader Workspace
+          </Link>
+        )}
+
         </div>
 
         {/* User Area / Logout */}

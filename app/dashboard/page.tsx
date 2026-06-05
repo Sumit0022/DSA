@@ -1,36 +1,36 @@
 // app/dashboard/page.tsx
 "use client";
 
-import { ShieldCheck, MapPin, Eye, ArrowRight, Loader2, Bell, UserCircle } from "lucide-react";
+import { ShieldCheck, MapPin, Eye, ArrowRight, Loader2, Bell, UserCircle, Calendar, Clock } from "lucide-react";
 import Link from "next/link";
 import DigitalPass from "@/components/DigitalPass";
 import { useUser } from "@/hooks/useUser"; 
 import { useState, useEffect } from "react";
-import { collection, query, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, getDocs, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function CitizenDashboard() {
   const { userData, loadingUser } = useUser();
   const [recentWatchdogs, setRecentWatchdogs] = useState<any[]>([]);
   const [loadingWatchdogs, setLoadingWatchdogs] = useState(true);
+  
+  // 🚀 UPCOMING MEETINGS STATE 🚀
+  const [upcomingMeets, setUpcomingMeets] = useState<any[]>([]);
 
+  // Watchdog Fetcher
   useEffect(() => {
     const fetchWatchdogs = async () => {
       try {
-        // Fetch all posts ordered by newest first
         const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
         const querySnapshot = await getDocs(q);
         const posts: any[] = [];
         
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          // JS Level Filter to avoid Firebase Composite Index errors
           if (data.type === "watchdog" && data.status === "Published") {
             posts.push({ id: doc.id, ...data });
           }
         });
-        
-        // Only keep the latest 3
         setRecentWatchdogs(posts.slice(0, 3));
       } catch (error) {
         console.error("Error fetching watchdogs", error);
@@ -38,9 +38,57 @@ export default function CitizenDashboard() {
         setLoadingWatchdogs(false);
       }
     };
-    
     fetchWatchdogs();
   }, []);
+
+  // 🚀 UPCOMING MEETINGS RADAR FETCHER 🚀
+  useEffect(() => {
+    if (!userData?.state) return;
+
+    // Same advanced matcher from meetings page
+    const isAudienceMatched = (meetingTarget: string, userRole: string) => {
+      if (!meetingTarget || meetingTarget.includes("All")) return true;
+      const r = (userRole || "").toLowerCase();
+      const t = meetingTarget.toLowerCase();
+      if (t.includes("president") && !t.includes("vice")) return r.includes("president") && !r.includes("vice");
+      if (t.includes("vice president")) return r.includes("vice president");
+      if (t.includes("general secretary")) return r.includes("general secretary");
+      if (t.includes("secretary") && !t.includes("general")) return r.includes("secretary") && !r.includes("general");
+      if (t.includes("executive")) return r.includes("executive");
+      if (t === "active members only") return r === "active_member" || r === "member";
+      return true;
+    };
+
+    const q = query(collection(db, "meetings"), where("jurisdictionState", "in", [userData.state, "National", "All India"]));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const threeDaysLater = new Date(today);
+      threeDaysLater.setDate(today.getDate() + 3);
+
+      const docs: any[] = [];
+      snapshot.forEach((doc) => {
+        const meet = doc.data();
+        const meetDate = new Date(meet.date);
+        
+        // Filter logic: Only next 3 days + Not completed
+        if (meet.attendanceStatus !== 'Completed' && meetDate >= today && meetDate <= threeDaysLater) {
+          // Jurisdiction Check
+          if (meet.jurisdictionState === "National" || meet.jurisdictionState === "All India" || meet.jurisdictionDistrict === "State Wide" || meet.jurisdictionDistrict === userData.district) {
+             // Audience Check
+             if (isAudienceMatched(meet.targetAudience, userData.role)) {
+                docs.push({ id: doc.id, ...meet });
+             }
+          }
+        }
+      });
+      // Sort by date closest first
+      setUpcomingMeets(docs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+    });
+    return () => unsubscribe();
+  }, [userData]);
+
 
   if (loadingUser) {
     return (
@@ -89,6 +137,37 @@ export default function CitizenDashboard() {
           </div>
         </div>
       </div>
+
+      {/* 🚀 UPCOMING PRIORITY RADAR SECTION (Only visible if meetings exist) 🚀 */}
+      {upcomingMeets.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2 ml-1">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse border border-white shadow-sm"></span> Priority Action Radar (Next 3 Days)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {upcomingMeets.map((meet) => (
+              <div key={meet.id} className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700 text-white relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[#007AFF]/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
+                
+                <div className="relative z-10">
+                  <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest mb-2 ${meet.type === 'Digital' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-orange-500/20 text-orange-300 border border-orange-500/30'}`}>
+                    {meet.type} Meet
+                  </span>
+                  <h4 className="font-black text-lg leading-tight mb-2 line-clamp-1">{meet.title}</h4>
+                  <div className="flex items-center gap-3 text-xs font-medium text-gray-300">
+                    <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {meet.date}</span>
+                    <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {meet.time}</span>
+                  </div>
+                </div>
+                
+                <Link href="/dashboard/meetings" className="absolute bottom-4 right-4 bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
+                  <ArrowRight className="w-4 h-4 text-white" />
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 1. STATUS BANNER */}
       <div className="bg-gray-900 rounded-2xl md:rounded-3xl p-6 md:p-10 text-white relative overflow-hidden shadow-xl">

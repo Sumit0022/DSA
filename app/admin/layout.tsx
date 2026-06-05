@@ -7,10 +7,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, Users, Mail, FileText, Settings, LogOut, Menu, X, Sunrise, Search, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IndianRupee } from "lucide-react";
+import { Activity } from "lucide-react";
 
 const sidebarLinks = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { name: "Citizens Ledger", href: "/admin/members", icon: Users },
+  { name: "Activity Radar", href: "/admin/activity", icon: Activity },
   { name: "Newsletter", href: "/admin/newsletter", icon: Mail },
   { name: "Publishing Hub", href: "/admin/blog", icon: FileText },
   { name: "Donations", href: "/admin/donations", icon: IndianRupee},

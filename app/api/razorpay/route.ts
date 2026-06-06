@@ -1,16 +1,36 @@
 // app/api/razorpay/route.ts
 import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
-
-// Razorpay instance initialize kar rahe hain server secrets ke sath
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID as string,
-  key_secret: process.env.RAZORPAY_KEY_SECRET as string,
-});
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export async function POST(request: Request) {
   try {
-    // Safely parse the request body
+    // 1. 🔥 DYNAMIC CONFIG FETCH FROM FIREBASE 🔥
+    let dynamicFee = 20; // Fallback safety value
+    let rzpKey = process.env.RAZORPAY_KEY_ID as string;
+    let rzpSecret = process.env.RAZORPAY_KEY_SECRET as string;
+
+    try {
+      const settingsSnap = await getDoc(doc(db, "settings", "core_config"));
+      if (settingsSnap.exists()) {
+        const data = settingsSnap.data();
+        if (data.membershipFee) dynamicFee = Number(data.membershipFee);
+        if (data.razorpayId) rzpKey = data.razorpayId;
+        if (data.razorpaySecret) rzpSecret = data.razorpaySecret;
+      }
+    } catch (dbErr) {
+      console.error("Failed to fetch dynamic settings from Firebase:", dbErr);
+    }
+
+    // 2. 🔥 DYNAMIC RAZORPAY INITIALIZATION 🔥
+    // (Ab instance bahar nahi, request ke andar banega taaki live keys use hon)
+    const razorpay = new Razorpay({
+      key_id: rzpKey,
+      key_secret: rzpSecret,
+    });
+
+    // 3. PARSE BODY FOR OVERRIDES
     let body: any = {};
     try {
       body = await request.json();
@@ -18,10 +38,10 @@ export async function POST(request: Request) {
       // Body might be empty in the old join implementation
     }
 
-    // DYNAMIC LOGIC: 
+    // 4. SMART AMOUNT CALCULATION
     // Agar body mein amount aaya hai (Donation) -> Convert to paise
-    // Agar nahi aaya (Old Registration) -> Default ₹20 (2000 paise)
-    let amountInPaise = 2000; 
+    // Agar nahi aaya (Registration) -> Use Firebase Dynamic Fee
+    let amountInPaise = dynamicFee * 100; 
     
     if (body && body.amount) {
       amountInPaise = body.amount * 100;
@@ -29,7 +49,7 @@ export async function POST(request: Request) {
 
     const currency = "INR";
 
-    // Razorpay par ek order create karne ki request
+    // 5. CREATE ORDER
     const options = {
       amount: amountInPaise,
       currency: currency,
@@ -40,12 +60,12 @@ export async function POST(request: Request) {
     const order = await razorpay.orders.create(options);
 
     // Frontend ko securely Order ID aur details bhej rahe hain
-    // Naye donation page ko 'orderId' aur purane page ko 'id' chahiye, hum dono bhej denge taaki kuch break na ho.
     return NextResponse.json({
       id: order.id,
       orderId: order.id,
       currency: order.currency,
       amount: order.amount,
+      rzpKeyId: rzpKey // Bonus: Sending dynamic key to frontend just in case needed
     }, { status: 200 });
 
   } catch (error) {

@@ -2,10 +2,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, orderBy, limit, where } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, where, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Users, Wallet, MapPin, TrendingUp, RefreshCcw } from "lucide-react";
-import Link from "next/link"; // Yeh import add kiya hai
+import Link from "next/link"; 
 
 interface Member {
   id: string;
@@ -14,26 +14,37 @@ interface Member {
   state: string;
   status: string;
   joinedAt: any;
+  paymentAmount?: number; // 🔥 Historical amount saved during registration
 }
 
 export default function AdminDashboard() {
   const [members, setMembers] = useState<Member[]>([]);
   const [totalMembers, setTotalMembers] = useState(0);
+  const [allianceFunds, setAllianceFunds] = useState(0); // 🔥 New State for accurate funds
   const [loading, setLoading] = useState(true);
 
   const fetchStats = async () => {
     setLoading(true);
     try {
+      // Fetch Alliance Members Data
       const membersRef = collection(db, "members");
       const q = query(membersRef, where("status", "==", "active_member"), orderBy("joinedAt", "desc"));
       const querySnapshot = await getDocs(q);
       
       const fetchedMembers: Member[] = [];
+      let calculatedFunds = 0; // Cumulative sum variable
+
       querySnapshot.forEach((doc) => {
-        fetchedMembers.push({ id: doc.id, ...doc.data() } as Member);
+        const data = doc.data();
+        fetchedMembers.push({ id: doc.id, ...data } as Member);
+        
+        // 🔥 HISTORICAL PRICING ENGINE 🔥
+        // Agar DB mein user ka actual paymentAmount hai, toh wo use karo, warna purana default 20
+        calculatedFunds += Number(data.paymentAmount || 20); 
       });
 
       setTotalMembers(fetchedMembers.length);
+      setAllianceFunds(calculatedFunds);
       setMembers(fetchedMembers.slice(0, 5));
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -79,8 +90,9 @@ export default function AdminDashboard() {
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Alliance Funds</h3>
               <Wallet className="w-5 h-5 text-[#34C759]" />
             </div>
-            <p className="text-4xl font-black text-gray-900">₹{loading ? "..." : (totalMembers * 20).toLocaleString()}</p>
-            <p className="text-sm text-gray-500 font-medium mt-2">At ₹20 per membership pass</p>
+            {/* 🔥 SHOWING PRECISE HISTORICAL SUM 🔥 */}
+            <p className="text-4xl font-black text-gray-900">₹{loading ? "..." : allianceFunds.toLocaleString()}</p>
+            <p className="text-sm text-gray-500 font-medium mt-2">Cumulative revenue from registration passes</p>
           </div>
         </div>
 
@@ -102,7 +114,6 @@ export default function AdminDashboard() {
         <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
           <h3 className="font-bold text-gray-900">Recent Registrations</h3>
           
-          {/* YAHAN LINK ADD KIYA HAI */}
           <Link href="/admin/members" className="text-sm font-semibold text-[#007AFF] hover:underline">
             View All Ledger &rarr;
           </Link>

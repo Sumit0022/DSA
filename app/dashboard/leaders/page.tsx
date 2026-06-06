@@ -4,21 +4,10 @@
 import { useEffect, useState } from "react";
 import { Award, Megaphone, Users, MapPin, ShieldCheck, Crown, Loader2, Globe, AlertTriangle, CheckSquare, Square, X, Clock, CheckCircle2, ChevronRight, CalendarDays, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { collection, getDocs, query, where, addDoc, serverTimestamp, onSnapshot, doc } from "firebase/firestore";
+import { collection, getDocs, query, where, addDoc, serverTimestamp, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useUser } from "@/hooks/useUser"; 
 import { useRouter } from "next/navigation";
-
-const POST_TITLES = [
-  "President",
-  "Working President",
-  "Vice President",
-  "General Secretary",
-  "Secretary",
-  "Chief Spokesperson",
-  "Treasurer",
-  "Executive Member"
-];
 
 export default function LocalLeadersPage() {
   const router = useRouter();
@@ -39,7 +28,11 @@ export default function LocalLeadersPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [applyLevel, setApplyLevel] = useState("District");
-  const [applyTitle, setApplyTitle] = useState(POST_TITLES[0]);
+  const [applyTitle, setApplyTitle] = useState("");
+
+  // 🔥 NEW STATES FOR DYNAMIC HIERARCHY 🔥
+  const [hierarchyData, setHierarchyData] = useState<any>(null);
+  const [availableTitles, setAvailableTitles] = useState<string[]>([]);
 
   // Identify Current User's Hierarchy
   const myRole = (userData?.role || "").toLowerCase();
@@ -47,6 +40,43 @@ export default function LocalLeadersPage() {
   const isState = myRole.includes("state");
   const isDistrict = myRole.includes("district");
   const isNormalMember = !isNational && !isState && !isDistrict;
+
+  // FETCH DYNAMIC HIERARCHY TITLES
+  useEffect(() => {
+    const fetchHierarchy = async () => {
+      try {
+        const docRef = doc(db, "settings", "roles_hierarchy");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setHierarchyData(docSnap.data());
+        }
+      } catch (error) {
+        console.error("Error fetching hierarchy:", error);
+      }
+    };
+    fetchHierarchy();
+  }, []);
+
+  // EXTRACT TITLES BASED ON SELECTED LEVEL
+  useEffect(() => {
+    if (hierarchyData && hierarchyData[applyLevel]) {
+      const tiers = hierarchyData[applyLevel];
+      const titles: string[] = [];
+      tiers.forEach((tier: any) => {
+        if (tier.titles) {
+          tier.titles.forEach((t: any) => titles.push(t.title));
+        }
+      });
+      setAvailableTitles(titles);
+      
+      // Auto-select the first available title if current selection is invalid
+      if (titles.length > 0 && !titles.includes(applyTitle)) {
+        setApplyTitle(titles[0]);
+      } else if (titles.length === 0) {
+        setApplyTitle("");
+      }
+    }
+  }, [hierarchyData, applyLevel]);
 
   // FETCH LEADERS & SETTINGS
   useEffect(() => {
@@ -138,7 +168,7 @@ export default function LocalLeadersPage() {
 
   const submitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) return;
+    if (!currentUser || !applyTitle) return;
     setIsSubmitting(true);
 
     const location = applyLevel === "District" ? userDistrict : applyLevel === "State" ? userState : "India";
@@ -424,12 +454,16 @@ export default function LocalLeadersPage() {
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Official Post Title</label>
                     <select value={applyTitle} onChange={(e) => setApplyTitle(e.target.value)} className="w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm">
-                      {POST_TITLES.map((title) => <option key={title} value={title}>{title}</option>)}
+                      {availableTitles.length > 0 ? (
+                        availableTitles.map((title) => <option key={title} value={title}>{title}</option>)
+                      ) : (
+                        <option value="" disabled>No posts available</option>
+                      )}
                     </select>
                   </div>
                 </div>
 
-                <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-4">
+                <button type="submit" disabled={isSubmitting || !applyTitle} className="w-full py-3.5 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-4">
                   {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5" />}
                   {isSubmitting ? "Processing..." : "Start Screening Chat"}
                 </button>

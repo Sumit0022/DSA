@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useUser } from "@/hooks/useUser";
 import { Calendar, Users, Mail, Video, MapPin, Loader2, CheckCircle2, ClipboardList, ShieldAlert, Plus, Send, Clock, UserCheck, X, Search, Eye, PlayCircle, Crosshair, MessageSquare, Target } from "lucide-react";
@@ -55,6 +55,10 @@ export default function LeaderWorkspace() {
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [isDispatchingBroadcast, setIsDispatchingBroadcast] = useState(false);
 
+  // 🔥 NEW STATES FOR DYNAMIC HIERARCHY 🔥
+  const [hierarchyData, setHierarchyData] = useState<any>(null);
+  const [dynamicOptions, setDynamicOptions] = useState<{label: string, value: string}[]>([]);
+
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | null }>({ message: "", type: null });
 
   const showToast = (message: string, type: "success" | "error") => {
@@ -62,36 +66,95 @@ export default function LeaderWorkspace() {
     setTimeout(() => setToast({ message: "", type: null }), 4000);
   };
 
-  // Set default audience target based on hierarchy
+  // FETCH DYNAMIC HIERARCHY DATA
   useEffect(() => {
-    if (isNational) setTargetAudience("All State Leaders");
-    else if (isState) setTargetAudience("All State & District Leaders");
-    else setTargetAudience("All District & Ground Cadre");
-  }, [isNational, isState]);
+    const fetchHierarchy = async () => {
+      try {
+        const docRef = doc(db, "settings", "roles_hierarchy");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setHierarchyData(docSnap.data());
+        }
+      } catch (error) {
+        console.error("Error fetching hierarchy:", error);
+      }
+    };
+    fetchHierarchy();
+  }, []);
+
+  // BUILD DYNAMIC DROPDOWN OPTIONS BASED ON LEADER'S LEVEL
+  useEffect(() => {
+    if (!hierarchyData) return;
+    
+    let options: {label: string, value: string}[] = [];
+
+    const getTitlesFromTierList = (tierList: any[], levelPrefix: string) => {
+      let extracted: string[] = [];
+      tierList.forEach(tier => {
+        if (tier.titles) {
+          tier.titles.forEach((t: any) => extracted.push(`${levelPrefix} ${t.title}`));
+        }
+      });
+      return extracted;
+    };
+
+    if (isNational) {
+      options.push({ label: "All State Leaders", value: "All State Leaders" });
+      if (hierarchyData.State) {
+         getTitlesFromTierList(hierarchyData.State, "State").forEach(title => {
+           options.push({ label: `${title} Only`, value: title });
+         });
+      }
+    } 
+    else if (isState) {
+      options.push({ label: "All State & District Leaders", value: "All State & District Leaders" });
+      options.push({ label: "All State Subordinate Leaders", value: "All State Subordinate Leaders" });
+      if (hierarchyData.State) {
+        getTitlesFromTierList(hierarchyData.State, "State").forEach(title => {
+          options.push({ label: `${title} Only`, value: title });
+        });
+      }
+      options.push({ label: "All District Leaders", value: "All District Leaders" });
+      if (hierarchyData.District) {
+        getTitlesFromTierList(hierarchyData.District, "District").forEach(title => {
+          options.push({ label: `${title} Only`, value: title });
+        });
+      }
+    } 
+    else if (isDistrict) {
+      options.push({ label: "All District & Ground Cadre", value: "All District & Ground Cadre" });
+      if (hierarchyData.District) {
+        getTitlesFromTierList(hierarchyData.District, "District").forEach(title => {
+          options.push({ label: `${title} Only`, value: title });
+        });
+      }
+      options.push({ label: "All Booth Leaders", value: "All Booth Leaders" });
+      options.push({ label: "Booth Presidents Only", value: "Booth President" });
+      options.push({ label: "Active Members Only", value: "Active Members Only" });
+    }
+
+    setDynamicOptions(options);
+    if (options.length > 0) {
+      setTargetAudience(options[0].value);
+    }
+  }, [hierarchyData, isNational, isState, isDistrict]);
 
   // 🔥 ADVANCED AUDIENCE MATCHER ENGINE 🔥
   const matchAudience = (memberRole: string, targetValue: string) => {
     const r = (memberRole || "").toLowerCase();
     const t = targetValue.toLowerCase();
 
-    // Check for specific "All" categories
-    if (t.includes("all")) {
-      if (t === "all state leaders" || t === "all state subordinate leaders") return r.includes("state");
-      if (t === "all district leaders") return r.includes("district");
-      if (t === "all state & district leaders") return r.includes("state") || r.includes("district");
-      if (t === "all booth leaders") return r.includes("booth");
-      return true; // Fallback for All Cadre
-    }
-
-    // Strict specific role matching
-    if (t.includes("president") && !t.includes("vice")) return r.includes("president") && !r.includes("vice");
-    if (t.includes("vice president")) return r.includes("vice president");
-    if (t.includes("general secretary")) return r.includes("general secretary");
-    if (t.includes("secretary") && !t.includes("general")) return r.includes("secretary") && !r.includes("general");
-    if (t.includes("executive")) return r.includes("executive");
+    // Specific "All" broad categories
+    if (t === "all state leaders" || t === "all state subordinate leaders") return r.includes("state");
+    if (t === "all district leaders") return r.includes("district");
+    if (t === "all state & district leaders") return r.includes("state") || r.includes("district");
+    if (t === "all booth leaders") return r.includes("booth");
+    if (t === "all district & ground cadre") return !r.includes("state") && !r.includes("national");
     if (t === "active members only") return r === "active_member" || r === "member";
 
-    return true;
+    // Dynamic Exact Match (e.g. "State President")
+    // Note: The dropdown value now perfectly matches the exact combined string from hierarchy
+    return r === t; 
   };
 
   useEffect(() => {
@@ -100,13 +163,12 @@ export default function LeaderWorkspace() {
     const membersRef = collection(db, "members");
     let membersQuery;
 
-    // Fetch members based on jurisdiction limits
     if (isNational) {
-      membersQuery = query(membersRef); // Scans nationwide
+      membersQuery = query(membersRef); 
     } else if (isState) {
-      membersQuery = query(membersRef, where("state", "==", userData.state)); // Scans entire state
+      membersQuery = query(membersRef, where("state", "==", userData.state)); 
     } else {
-      membersQuery = query(membersRef, where("state", "==", userData.state), where("district", "==", userData.district)); // Scans district
+      membersQuery = query(membersRef, where("state", "==", userData.state), where("district", "==", userData.district)); 
     }
 
     const unsubscribeMembers = onSnapshot(membersQuery, (snapshot) => {
@@ -115,17 +177,13 @@ export default function LeaderWorkspace() {
         const data = docSnap.data();
         const r = (data.role || "").toLowerCase();
         
-        // Prevent user from seeing themselves in subordinate lists
         if (docSnap.id === userData.id) return;
 
-        // Ensure proper hierarchy visibility
         if (isNational) {
           if (r.includes("state")) docs.push({ id: docSnap.id, ...data });
         } else if (isState) {
-          // State sees other State roles AND District roles
           if (r.includes("state") || r.includes("district")) docs.push({ id: docSnap.id, ...data });
         } else {
-          // District sees other District roles AND lower cadre (booth/active members)
           if (!r.includes("state") && !r.includes("national")) {
             docs.push({ id: docSnap.id, ...data });
           }
@@ -367,7 +425,7 @@ export default function LeaderWorkspace() {
               
               <form onSubmit={handleScheduleMeeting} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
-                {/* 🔥 DYNAMIC SUB-CATEGORY AUDIENCE SELECTOR WITH ALL POSTS 🔥 */}
+                {/* 🔥 DYNAMIC SUB-CATEGORY AUDIENCE SELECTOR WITH LIVE POSTS 🔥 */}
                 <div className="md:col-span-2 bg-blue-50/50 p-4 border border-blue-100 rounded-2xl mb-2">
                   <label className="text-[10px] font-black text-[#007AFF] uppercase tracking-widest flex items-center gap-1.5 mb-2">
                     <Target className="w-3.5 h-3.5" /> Select Target Cadre Audience
@@ -376,43 +434,12 @@ export default function LeaderWorkspace() {
                     value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} 
                     className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm font-bold text-gray-900 outline-none focus:ring-4 focus:ring-blue-100 transition-all shadow-sm cursor-pointer"
                   >
-                    {isNational && (
-                      <>
-                        <option value="All State Leaders">All State Leaders</option>
-                        <option value="State Presidents">State Presidents</option>
-                        <option value="State Vice Presidents">State Vice Presidents</option>
-                        <option value="State General Secretaries">State General Secretaries</option>
-                        <option value="State Secretaries">State Secretaries</option>
-                        <option value="State Executive Members">State Executive Members</option>
-                      </>
-                    )}
-                    {isState && (
-                      <>
-                        <option value="All State & District Leaders">All State & District Leaders</option>
-                        <option value="All State Subordinate Leaders">All State Subordinate Leaders</option>
-                        <option value="State Vice Presidents">State Vice Presidents</option>
-                        <option value="State General Secretaries">State General Secretaries</option>
-                        <option value="State Secretaries">State Secretaries</option>
-                        <option value="State Executive Members">State Executive Members</option>
-                        <option value="All District Leaders">All District Leaders</option>
-                        <option value="District Presidents">District Presidents</option>
-                        <option value="District Vice Presidents">District Vice Presidents</option>
-                        <option value="District General Secretaries">District General Secretaries</option>
-                        <option value="District Secretaries">District Secretaries</option>
-                        <option value="District Executive Members">District Executive Members</option>
-                      </>
-                    )}
-                    {isDistrict && (
-                      <>
-                        <option value="All District & Ground Cadre">All District & Ground Cadre</option>
-                        <option value="District Vice Presidents">District Vice Presidents</option>
-                        <option value="District General Secretaries">District General Secretaries</option>
-                        <option value="District Secretaries">District Secretaries</option>
-                        <option value="District Executive Members">District Executive Members</option>
-                        <option value="All Booth Leaders">All Booth Leaders</option>
-                        <option value="Booth Presidents">Booth Presidents</option>
-                        <option value="Active Members Only">Active Members Only</option>
-                      </>
+                    {dynamicOptions.length > 0 ? (
+                      dynamicOptions.map((opt, idx) => (
+                        <option key={idx} value={opt.value}>{opt.label}</option>
+                      ))
+                    ) : (
+                      <option value="" disabled>Loading target groups...</option>
                     )}
                   </select>
                 </div>
@@ -579,6 +606,7 @@ export default function LeaderWorkspace() {
 
               <form onSubmit={handleLocalBroadcast} className="space-y-4">
                 
+                {/* 🔥 DYNAMIC SUB-CATEGORY EMAIL SELECTOR 🔥 */}
                 <div className="bg-orange-50/50 p-4 border border-orange-100 rounded-2xl mb-2">
                   <label className="text-[10px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
                     <Target className="w-3.5 h-3.5" /> Sub-Category Recipient Target
@@ -587,43 +615,12 @@ export default function LeaderWorkspace() {
                     value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} 
                     className="w-full px-4 py-3 bg-white border border-orange-200 rounded-xl text-sm font-bold text-gray-900 outline-none focus:ring-4 focus:ring-orange-50 transition-all shadow-sm cursor-pointer"
                   >
-                    {isNational && (
-                      <>
-                        <option value="All State Leaders">All State Leaders</option>
-                        <option value="State Presidents">State Presidents</option>
-                        <option value="State Vice Presidents">State Vice Presidents</option>
-                        <option value="State General Secretaries">State General Secretaries</option>
-                        <option value="State Secretaries">State Secretaries</option>
-                        <option value="State Executive Members">State Executive Members</option>
-                      </>
-                    )}
-                    {isState && (
-                      <>
-                        <option value="All State & District Leaders">All State & District Leaders</option>
-                        <option value="All State Subordinate Leaders">All State Subordinate Leaders</option>
-                        <option value="State Vice Presidents">State Vice Presidents</option>
-                        <option value="State General Secretaries">State General Secretaries</option>
-                        <option value="State Secretaries">State Secretaries</option>
-                        <option value="State Executive Members">State Executive Members</option>
-                        <option value="All District Leaders">All District Leaders</option>
-                        <option value="District Presidents">District Presidents</option>
-                        <option value="District Vice Presidents">District Vice Presidents</option>
-                        <option value="District General Secretaries">District General Secretaries</option>
-                        <option value="District Secretaries">District Secretaries</option>
-                        <option value="District Executive Members">District Executive Members</option>
-                      </>
-                    )}
-                    {isDistrict && (
-                      <>
-                        <option value="All District & Ground Cadre">All District & Ground Cadre</option>
-                        <option value="District Vice Presidents">District Vice Presidents</option>
-                        <option value="District General Secretaries">District General Secretaries</option>
-                        <option value="District Secretaries">District Secretaries</option>
-                        <option value="District Executive Members">District Executive Members</option>
-                        <option value="All Booth Leaders">All Booth Leaders</option>
-                        <option value="Booth Presidents">Booth Presidents</option>
-                        <option value="Active Members Only">Active Members Only</option>
-                      </>
+                    {dynamicOptions.length > 0 ? (
+                      dynamicOptions.map((opt, idx) => (
+                        <option key={idx} value={opt.value}>{opt.label}</option>
+                      ))
+                    ) : (
+                      <option value="" disabled>Loading target groups...</option>
                     )}
                   </select>
                 </div>

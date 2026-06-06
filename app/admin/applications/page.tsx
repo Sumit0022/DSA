@@ -4,19 +4,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, ShieldCheck, XCircle, CheckCircle, Send, MessageSquare, MapPin, Paperclip, Info, Phone, Mail, Clock, User, Loader2, X, ArrowLeft, Crown, CalendarDays, Power } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-
-const POST_TITLES = [
-  "President",
-  "Working President",
-  "Vice President",
-  "General Secretary",
-  "Secretary",
-  "Chief Spokesperson",
-  "Treasurer",
-  "Executive Member"
-];
 
 const TERM_LENGTHS = ["6 Months", "1 Year", "2 Years", "3 Years", "5 Years"];
 
@@ -32,10 +21,14 @@ export default function ApplicationsInbox() {
   // INTAKE TOGGLE STATE
   const [isIntakeOpen, setIsIntakeOpen] = useState(true);
 
+  // 🔥 DYNAMIC HIERARCHY STATES 🔥
+  const [hierarchyData, setHierarchyData] = useState<any>(null);
+  const [availableTitles, setAvailableTitles] = useState<string[]>([]);
+
   // ROLE ASSIGNMENT STATES
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [assignLevel, setAssignLevel] = useState("District");
-  const [assignTitle, setAssignTitle] = useState(POST_TITLES[0]);
+  const [assignTitle, setAssignTitle] = useState("");
   const [assignTerm, setAssignTerm] = useState(TERM_LENGTHS[1]); 
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -43,6 +36,42 @@ export default function ApplicationsInbox() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeApp = applications.find(app => app.id === selectedAppId);
+
+  // FETCH DYNAMIC HIERARCHY DATA
+  useEffect(() => {
+    const fetchHierarchy = async () => {
+      try {
+        const docRef = doc(db, "settings", "roles_hierarchy");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setHierarchyData(docSnap.data());
+        }
+      } catch (error) {
+        console.error("Error fetching hierarchy:", error);
+      }
+    };
+    fetchHierarchy();
+  }, []);
+
+  // EXTRACT TITLES BASED ON SELECTED ASSIGN LEVEL
+  useEffect(() => {
+    if (hierarchyData && hierarchyData[assignLevel]) {
+      const tiers = hierarchyData[assignLevel];
+      const titles: string[] = [];
+      tiers.forEach((tier: any) => {
+        if (tier.titles) {
+          tier.titles.forEach((t: any) => titles.push(t.title));
+        }
+      });
+      setAvailableTitles(titles);
+      
+      if (titles.length > 0 && !titles.includes(assignTitle)) {
+        setAssignTitle(titles[0]);
+      } else if (titles.length === 0) {
+        setAssignTitle("");
+      }
+    }
+  }, [hierarchyData, assignLevel]);
 
   // FETCH LIVE APPLICATIONS & INTAKE SETTINGS
   useEffect(() => {
@@ -63,7 +92,7 @@ export default function ApplicationsInbox() {
       if (docSnap.exists()) {
         setIsIntakeOpen(docSnap.data().isOpen);
       } else {
-        setIsIntakeOpen(true); // default to true if doc doesn't exist
+        setIsIntakeOpen(true); 
       }
     });
 
@@ -80,12 +109,12 @@ export default function ApplicationsInbox() {
   // TOGGLE HANDLER
   const handleToggleIntake = async () => {
     const newStatus = !isIntakeOpen;
-    setIsIntakeOpen(newStatus); // Optimistic Update
+    setIsIntakeOpen(newStatus); 
     try {
       await setDoc(doc(db, "settings", "applications"), { isOpen: newStatus }, { merge: true });
     } catch (error) {
       console.error("Failed to toggle intake", error);
-      setIsIntakeOpen(!newStatus); // Revert if failed
+      setIsIntakeOpen(!newStatus); 
       alert("Failed to update intake status.");
     }
   };
@@ -145,14 +174,11 @@ export default function ApplicationsInbox() {
   // 🟢 APPROVE INIT (OPENS MODAL)
   const handleApproveInit = () => {
     if (!activeApp) return;
-    // Auto-fill from their requested role if available, otherwise default
     if (activeApp.requestedRole) {
       const parts = activeApp.requestedRole.split(" ");
       setAssignLevel(parts[0]);
-      setAssignTitle(parts.slice(1).join(" "));
     } else {
       setAssignLevel("District");
-      setAssignTitle(POST_TITLES[0]);
     }
     setAssignTerm(TERM_LENGTHS[1]);
     setShowRoleModal(true);
@@ -161,7 +187,7 @@ export default function ApplicationsInbox() {
   // 🟢 CONFIRM APPROVAL
   const confirmApproval = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeApp || !activeApp.userId) return;
+    if (!activeApp || !activeApp.userId || !assignTitle) return;
     setIsProcessing(true);
 
     let location = "India";
@@ -317,7 +343,7 @@ export default function ApplicationsInbox() {
         )}
       </div>
 
-      {/* ROLE ASSIGNMENT MODAL (WITH TERM LENGTH) */}
+      {/* ROLE ASSIGNMENT MODAL (WITH DYNAMIC HIERARCHY TITLES) */}
       <AnimatePresence>
         {showRoleModal && activeApp && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -342,7 +368,11 @@ export default function ApplicationsInbox() {
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Official Post</label>
                     <select value={assignTitle} onChange={(e) => setAssignTitle(e.target.value)} className="w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm">
-                      {POST_TITLES.map((title) => <option key={title} value={title}>{title}</option>)}
+                      {availableTitles.length > 0 ? (
+                        availableTitles.map((title) => <option key={title} value={title}>{title}</option>)
+                      ) : (
+                        <option value="" disabled>No posts defined for this tier.</option>
+                      )}
                     </select>
                   </div>
                   <div>
@@ -352,7 +382,7 @@ export default function ApplicationsInbox() {
                     </select>
                   </div>
                 </div>
-                <button type="submit" disabled={isProcessing} className="w-full py-3 md:py-3.5 bg-green-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-4">
+                <button type="submit" disabled={isProcessing || !assignTitle} className="w-full py-3 md:py-3.5 bg-green-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-4">
                   {isProcessing ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Crown className="w-4 h-4 md:w-5 md:h-5" />}
                   Confirm Appointment
                 </button>
@@ -362,7 +392,7 @@ export default function ApplicationsInbox() {
         )}
       </AnimatePresence>
 
-      {/* Profile Modal */}
+      {/* FIXED PROFILE MODAL */}
       <AnimatePresence>
         {showProfile && activeApp && (
           <>
@@ -374,10 +404,32 @@ export default function ApplicationsInbox() {
               </div>
               <div className="p-4 md:p-6 flex-1 overflow-y-auto space-y-6">
                 <div className="text-center">
-                  <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-tr from-[#007AFF] to-blue-400 text-white rounded-full flex items-center justify-center mx-auto shadow-md mb-3 md:mb-4 text-xl md:text-2xl font-black">{activeApp.name.charAt(0)}</div>
+                  <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-tr from-[#007AFF] to-blue-400 text-white rounded-full flex items-center justify-center mx-auto shadow-md mb-3 md:mb-4 text-xl md:text-2xl font-black">
+                    {activeApp.name.charAt(0)}
+                  </div>
                   <h2 className="text-lg md:text-xl font-black text-gray-900">{activeApp.name}</h2>
-                  <span className="inline-block px-2 py-0.5 md:px-2.5 md:py-1 bg-gray-100 text-gray-600 text-[9px] md:text-[10px] font-bold uppercase tracking-widest rounded-md mt-1 md:mt-2">ID: {activeApp.memberId || "VERIFIED"}</span>
+                  {activeApp.memberId && (
+                    <span className="inline-block px-2 py-0.5 md:px-2.5 md:py-1 bg-gray-100 text-gray-600 text-[9px] md:text-[10px] font-bold uppercase tracking-widest rounded-md mt-1 md:mt-2">ID: {activeApp.memberId}</span>
+                  )}
                 </div>
+
+                {/* DETAILED INFO SECTION ADDED */}
+                <div className="space-y-4 pt-4 border-t border-gray-100">
+                  <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Contact Details</p>
+                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-[#007AFF]"/> {activeApp.phone || "N/A"}</p>
+                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2 mt-2"><Mail className="w-3.5 h-3.5 text-[#007AFF]"/> {activeApp.email || "No Email Provided"}</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Location Details</p>
+                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-[#007AFF]"/> {activeApp.district}, {activeApp.state}</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Target Post</p>
+                    <p className="text-sm font-black text-[#007AFF]">{activeApp.requestedRole || "Not Specified"}</p>
+                  </div>
+                </div>
+
               </div>
             </motion.div>
           </>

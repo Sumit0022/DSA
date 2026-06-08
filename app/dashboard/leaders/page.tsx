@@ -30,9 +30,9 @@ export default function LocalLeadersPage() {
   const [applyLevel, setApplyLevel] = useState("District");
   const [applyTitle, setApplyTitle] = useState("");
 
-  // 🔥 NEW STATES FOR DYNAMIC HIERARCHY 🔥
+  // 🔥 NEW STATES FOR DYNAMIC HIERARCHY & VACANCY 🔥
   const [hierarchyData, setHierarchyData] = useState<any>(null);
-  const [availableTitles, setAvailableTitles] = useState<string[]>([]);
+  const [vacancyData, setVacancyData] = useState<{title: string, maxLimit: number, filled: number, isAvailable: boolean}[]>([]);
 
   // Identify Current User's Hierarchy
   const myRole = (userData?.role || "").toLowerCase();
@@ -41,7 +41,7 @@ export default function LocalLeadersPage() {
   const isDistrict = myRole.includes("district");
   const isNormalMember = !isNational && !isState && !isDistrict;
 
-  // FETCH DYNAMIC HIERARCHY TITLES
+  // 1. FETCH DYNAMIC HIERARCHY
   useEffect(() => {
     const fetchHierarchy = async () => {
       try {
@@ -57,34 +57,12 @@ export default function LocalLeadersPage() {
     fetchHierarchy();
   }, []);
 
-  // EXTRACT TITLES BASED ON SELECTED LEVEL
-  useEffect(() => {
-    if (hierarchyData && hierarchyData[applyLevel]) {
-      const tiers = hierarchyData[applyLevel];
-      const titles: string[] = [];
-      tiers.forEach((tier: any) => {
-        if (tier.titles) {
-          tier.titles.forEach((t: any) => titles.push(t.title));
-        }
-      });
-      setAvailableTitles(titles);
-      
-      // Auto-select the first available title if current selection is invalid
-      if (titles.length > 0 && !titles.includes(applyTitle)) {
-        setApplyTitle(titles[0]);
-      } else if (titles.length === 0) {
-        setApplyTitle("");
-      }
-    }
-  }, [hierarchyData, applyLevel]);
-
-  // FETCH LEADERS & SETTINGS
+  // 2. FETCH LEADERS & SETTINGS (Updated to catch Phase 2 assignments)
   useEffect(() => {
     if (!userData) return;
     const fetchLiveLeaders = async () => {
       try {
         const membersRef = collection(db, "members");
-        // Only fetch non-members
         const q = query(membersRef, where("role", "!=", "member"));
         
         const querySnapshot = await getDocs(q);
@@ -94,30 +72,32 @@ export default function LocalLeadersPage() {
           const data = document.data();
           if (data.role === 'active_member') return; // Exclude ground cadre
 
+          // Cross-check old 'role' string and new 'roleLevel' from Phase 2
           const leaderRole = (data.role || "").toLowerCase();
+          const leaderLevel = (data.roleLevel || "").toLowerCase();
+          
+          const isLdrNational = leaderRole.includes("national") || leaderLevel === "national";
+          const isLdrState = leaderRole.includes("state") || leaderLevel === "state";
+          const isLdrDistrict = leaderRole.includes("district") || leaderLevel === "district";
           
           // 🔥 STRICT HIERARCHY ISOLATION LOGIC 🔥
           if (isNational) {
-            // National sees ONLY National leaders
-            if (leaderRole.includes("national")) fetchedLeaders.push({ id: document.id, ...data });
+            if (isLdrNational) fetchedLeaders.push({ id: document.id, ...data });
           } 
           else if (isState) {
-            // State sees ONLY State leaders of the SAME state
-            if (leaderRole.includes("state") && data.state === userData.state) {
+            if (isLdrState && data.state === userData.state) {
               fetchedLeaders.push({ id: document.id, ...data });
             }
           } 
           else if (isDistrict) {
-            // District sees ONLY District leaders of the SAME district
-            if (leaderRole.includes("district") && data.state === userData.state && data.district === userData.district) {
+            if (isLdrDistrict && data.state === userData.state && data.district === userData.district) {
               fetchedLeaders.push({ id: document.id, ...data });
             }
           } 
           else if (isNormalMember) {
-            // Member sees District Leaders of their district AND State Leaders of their state
             if (
-              (leaderRole.includes("district") && data.state === userData.state && data.district === userData.district) ||
-              (leaderRole.includes("state") && data.state === userData.state)
+              (isLdrDistrict && data.state === userData.state && data.district === userData.district) ||
+              (isLdrState && data.state === userData.state)
             ) {
               fetchedLeaders.push({ id: document.id, ...data });
             }
@@ -125,11 +105,13 @@ export default function LocalLeadersPage() {
         });
 
         fetchedLeaders.sort((a, b) => {
-          // Fix sorting based on role presence since roleLevel might not be consistently accurate
           const roleA = (a.role || "").toLowerCase();
+          const levelA = (a.roleLevel || "").toLowerCase();
           const roleB = (b.role || "").toLowerCase();
-          const weightA = roleA.includes("national") ? 1 : roleA.includes("state") ? 2 : 3;
-          const weightB = roleB.includes("national") ? 1 : roleB.includes("state") ? 2 : 3;
+          const levelB = (b.roleLevel || "").toLowerCase();
+          
+          const weightA = roleA.includes("national") || levelA === "national" ? 1 : roleA.includes("state") || levelA === "state" ? 2 : 3;
+          const weightB = roleB.includes("national") || levelB === "national" ? 1 : roleB.includes("state") || levelB === "state" ? 2 : 3;
           return weightA - weightB;
         });
         
@@ -148,6 +130,44 @@ export default function LocalLeadersPage() {
 
     return () => unsubscribeSettings();
   }, [userData?.id, userDistrict, userState]);
+
+  // 3. 🚀 SMART VACANCY CALCULATOR ENGINE 🚀
+  useEffect(() => {
+    if (hierarchyData && hierarchyData[applyLevel]) {
+      const tiers = hierarchyData[applyLevel];
+      const computedVacancies: any[] = [];
+      
+      tiers.forEach((tier: any) => {
+        if (tier.titles) {
+          tier.titles.forEach((t: any) => {
+            // Count how many people in my state/district actually hold this exact title
+            const filledCount = leaders.filter((l: any) => {
+              const levelMatch = l.roleLevel === applyLevel || (l.role || "").toLowerCase().includes(applyLevel.toLowerCase());
+              const titleMatch = l.roleTitle === t.title || l.role === t.title;
+              return levelMatch && titleMatch;
+            }).length;
+            
+            const max = t.maxLimit || 1;
+            computedVacancies.push({
+              title: t.title,
+              maxLimit: max,
+              filled: filledCount,
+              isAvailable: filledCount < max
+            });
+          });
+        }
+      });
+      setVacancyData(computedVacancies);
+      
+      // Auto-select the first AVAILABLE title
+      const available = computedVacancies.filter(v => v.isAvailable);
+      if (available.length > 0 && !available.find(v => v.title === applyTitle)) {
+        setApplyTitle(available[0].title);
+      } else if (available.length === 0) {
+        setApplyTitle("");
+      }
+    }
+  }, [hierarchyData, applyLevel, leaders]);
 
   // SYNC APPLICATION
   useEffect(() => {
@@ -233,7 +253,7 @@ export default function LocalLeadersPage() {
             <div>
               <p className="text-[10px] text-blue-200 font-bold uppercase tracking-widest mb-1">Official Designation</p>
               <h3 className="text-xl font-black capitalize flex items-center gap-2">
-                {userData.role?.replace(/_/g, ' ')} <ShieldCheck className="w-5 h-5 text-blue-300" />
+                {userData.roleTitle || userData.role?.replace(/_/g, ' ')} <ShieldCheck className="w-5 h-5 text-blue-300" />
               </h3>
             </div>
             <div className="h-10 w-px bg-white/20 hidden md:block"></div>
@@ -244,7 +264,7 @@ export default function LocalLeadersPage() {
             <div className="h-10 w-px bg-white/20 hidden md:block"></div>
             <div>
               <p className="text-[10px] text-blue-200 font-bold uppercase tracking-widest mb-1">Appointed On</p>
-              <p className="text-sm font-bold flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-blue-300"/> {userData.appointedAt ? new Date(userData.appointedAt.toDate()).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' }) : "Recently"}</p>
+              <p className="text-sm font-bold flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-blue-300"/> {userData.appointedAt ? new Date(userData.appointedAt.toDate ? userData.appointedAt.toDate() : userData.appointedAt.seconds * 1000).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' }) : "Recently"}</p>
             </div>
           </div>
         </div>
@@ -270,7 +290,7 @@ export default function LocalLeadersPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {leaders.map((leader) => {
-            const styles = getLevelStyles(leader.role);
+            const styles = getLevelStyles(leader.roleLevel || leader.role);
             const Icon = styles.icon;
             return (
               <motion.div key={leader.id} className="bg-white border border-gray-200 rounded-2xl md:rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
@@ -282,17 +302,17 @@ export default function LocalLeadersPage() {
                   </div>
                   <div>
                     <h3 className="text-lg md:text-xl font-black text-gray-900 line-clamp-1">{leader.name}</h3>
-                    <p className={`text-xs md:text-sm font-bold mt-0.5 capitalize ${styles.textColor}`}>{leader.role?.replace(/_/g, ' ')}</p>
+                    <p className={`text-xs md:text-sm font-bold mt-0.5 capitalize ${styles.textColor}`}>{leader.roleTitle || leader.role?.replace(/_/g, ' ')}</p>
                   </div>
 
                   <div className="space-y-3 pt-4 mt-4 border-t border-gray-100">
                     <div className="flex items-center gap-3 text-sm font-medium text-gray-600">
                       <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
-                      <span className="line-clamp-1">{leader.role.includes("national") ? "All India" : leader.role.includes("state") ? leader.state : `${leader.district}, ${leader.state}`}</span>
+                      <span className="line-clamp-1">{(leader.roleLevel || leader.role).includes("national") ? "All India" : (leader.roleLevel || leader.role).includes("state") ? leader.state : `${leader.district}, ${leader.state}`}</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm font-medium text-gray-600">
                       <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
-                      <span>Appointed: {leader.appointedAt ? new Date(leader.appointedAt.seconds * 1000).toLocaleDateString([], { year: 'numeric', month: 'short' }) : "Recently"}</span>
+                      <span>Appointed: {leader.appointmentDate || leader.appointedAt ? new Date((leader.appointmentDate || leader.appointedAt).seconds * 1000).toLocaleDateString([], { year: 'numeric', month: 'short' }) : "Recently"}</span>
                     </div>
                   </div>
                 </div>
@@ -429,7 +449,7 @@ export default function LocalLeadersPage() {
         )}
       </AnimatePresence>
 
-      {/* 2. POST SELECTION MODAL */}
+      {/* 2. POST SELECTION MODAL (Smart Gatekeeper Upgraded) */}
       <AnimatePresence>
         {showPostSelect && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -446,24 +466,47 @@ export default function LocalLeadersPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Applying At Level</label>
-                    <select value={applyLevel} onChange={(e) => setApplyLevel(e.target.value)} className="w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm">
+                    <select value={applyLevel} onChange={(e) => setApplyLevel(e.target.value)} className="w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm text-gray-900">
                       <option value="District">District ({userDistrict})</option>
                       <option value="State">State ({userState})</option>
                     </select>
                   </div>
+
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Official Post Title</label>
-                    <select value={applyTitle} onChange={(e) => setApplyTitle(e.target.value)} className="w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm">
-                      {availableTitles.length > 0 ? (
-                        availableTitles.map((title) => <option key={title} value={title}>{title}</option>)
+                    <select 
+                      value={applyTitle} 
+                      onChange={(e) => setApplyTitle(e.target.value)} 
+                      className={`w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none shadow-sm text-gray-900 ${vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable) ? 'opacity-60 cursor-not-allowed' : 'focus:border-[#007AFF]'}`}
+                    >
+                      {vacancyData.length > 0 ? (
+                        vacancyData.map((v) => (
+                          <option key={v.title} value={v.title} disabled={!v.isAvailable}>
+                            {v.title} {v.isAvailable ? `(${v.filled}/${v.maxLimit} Filled)` : `(No Vacancy - Full)`}
+                          </option>
+                        ))
                       ) : (
-                        <option value="" disabled>No posts available</option>
+                        <option value="" disabled>No posts defined</option>
                       )}
                     </select>
+
+                    {/* RED ALERT FOR FULL POSTS */}
+                    {vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable) && (
+                      <div className="mt-3 flex items-start gap-1.5 p-3 bg-red-50 border border-red-100 rounded-lg">
+                        <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                        <p className="text-[11px] text-red-700 font-bold leading-tight uppercase tracking-wider">
+                          All posts in this jurisdiction are currently occupied. Application locked.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <button type="submit" disabled={isSubmitting || !applyTitle} className="w-full py-3.5 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-4">
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting || !applyTitle || (vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable))} 
+                  className="w-full py-3.5 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
+                >
                   {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5" />}
                   {isSubmitting ? "Processing..." : "Start Screening Chat"}
                 </button>

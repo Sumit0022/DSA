@@ -16,11 +16,13 @@ export default function LeaderWorkspace() {
   const [localMembers, setLocalMembers] = useState<any[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
 
-  // 🔥 HIERARCHY IDENTIFICATION LOGIC 🔥
-  const roleStr = (userData?.role || "").toLowerCase();
-  const isNational = roleStr.includes("national");
-  const isState = roleStr.includes("state");
-  const isDistrict = roleStr.includes("district") || (!isNational && !isState); // Default to local
+  // 🔥 NEW HIERARCHY IDENTIFICATION LOGIC 🔥
+  const leaderLevel = (userData?.roleLevel || "").toLowerCase();
+  const oldRoleStr = (userData?.role || "").toLowerCase(); // Fallback
+  
+  const isNational = leaderLevel === "national" || oldRoleStr.includes("national");
+  const isState = leaderLevel === "state" || oldRoleStr.includes("state");
+  const isDistrict = leaderLevel === "district" || oldRoleStr.includes("district") || (!isNational && !isState); // Default to local
 
   const jurisdictionDisplay = isNational 
     ? "ALL INDIA (NATIONAL COMMAND)" 
@@ -60,7 +62,7 @@ export default function LeaderWorkspace() {
   const [hierarchyData, setHierarchyData] = useState<any>(null);
   const [dynamicOptions, setDynamicOptions] = useState<{label: string, value: string}[]>([]);
 
-  // 🔥 5. DIGITAL SIGNATURE STATES 🔥
+  // 5. DIGITAL SIGNATURE STATES
   const sigCanvas = useRef<SignatureCanvas>(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [isSavingSignature, setIsSavingSignature] = useState(false);
@@ -146,19 +148,28 @@ export default function LeaderWorkspace() {
     }
   }, [hierarchyData, isNational, isState, isDistrict]);
 
-  // ADVANCED AUDIENCE MATCHER ENGINE
-  const matchAudience = (memberRole: string, targetValue: string) => {
-    const r = (memberRole || "").toLowerCase();
+  // ADVANCED AUDIENCE MATCHER ENGINE (Updated for new role structure)
+  const matchAudience = (memberRoleLevel: string, memberRoleTitle: string, oldRole: string, targetValue: string) => {
+    const level = (memberRoleLevel || "").toLowerCase();
+    const title = (memberRoleTitle || "").toLowerCase();
+    const oldR = (oldRole || "").toLowerCase();
     const t = targetValue.toLowerCase();
 
-    if (t === "all state leaders" || t === "all state subordinate leaders") return r.includes("state");
-    if (t === "all district leaders") return r.includes("district");
-    if (t === "all state & district leaders") return r.includes("state") || r.includes("district");
-    if (t === "all booth leaders") return r.includes("booth");
-    if (t === "all district & ground cadre") return !r.includes("state") && !r.includes("national");
-    if (t === "active members only") return r === "active_member" || r === "member";
+    const isStateMem = level === "state" || oldR.includes("state");
+    const isDistMem = level === "district" || oldR.includes("district");
+    const isBoothMem = oldR.includes("booth"); // fallback if booth isn't in hierarchy
+    const isActiveMem = oldR === "active_member" || oldR === "member";
 
-    return r === t; 
+    if (t === "all state leaders" || t === "all state subordinate leaders") return isStateMem;
+    if (t === "all district leaders") return isDistMem;
+    if (t === "all state & district leaders") return isStateMem || isDistMem;
+    if (t === "all booth leaders") return isBoothMem;
+    if (t === "all district & ground cadre") return !isStateMem && !(level === "national" || oldR.includes("national"));
+    if (t === "active members only") return isActiveMem;
+
+    // Dynamic Exact Match (e.g. "State President")
+    const combinedRole = level && title ? `${level} ${title}` : oldR;
+    return combinedRole === t; 
   };
 
   useEffect(() => {
@@ -179,16 +190,21 @@ export default function LeaderWorkspace() {
       const docs: any[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        const r = (data.role || "").toLowerCase();
+        const level = (data.roleLevel || "").toLowerCase();
+        const oldR = (data.role || "").toLowerCase();
         
         if (docSnap.id === userData.id) return;
 
+        const isLdrState = level === "state" || oldR.includes("state");
+        const isLdrNational = level === "national" || oldR.includes("national");
+        const isLdrDistrict = level === "district" || oldR.includes("district");
+
         if (isNational) {
-          if (r.includes("state")) docs.push({ id: docSnap.id, ...data });
+          if (isLdrState) docs.push({ id: docSnap.id, ...data });
         } else if (isState) {
-          if (r.includes("state") || r.includes("district")) docs.push({ id: docSnap.id, ...data });
+          if (isLdrState || isLdrDistrict) docs.push({ id: docSnap.id, ...data });
         } else {
-          if (!r.includes("state") && !r.includes("national")) {
+          if (!isLdrState && !isLdrNational) {
             docs.push({ id: docSnap.id, ...data });
           }
         }
@@ -243,7 +259,7 @@ export default function LeaderWorkspace() {
         targetAudience: targetAudience,
         hostId: userData.id,
         hostName: userData.name,
-        hostRole: userData.role,
+        hostRole: userData.roleTitle || userData.role,
         jurisdictionState: isNational ? "National" : userData.state,
         jurisdictionDistrict: isNational ? "All India" : isState ? "State Wide" : userData.district,
         attendanceStatus: "Pending",
@@ -302,7 +318,10 @@ export default function LeaderWorkspace() {
       return showToast("Subject line and core payload message are required.", "error");
     }
 
-    const targetEmails = localMembers.filter(member => matchAudience(member.role, targetAudience)).map(m => m.email).filter(Boolean);
+    const targetEmails = localMembers
+        .filter(member => matchAudience(member.roleLevel, member.roleTitle, member.role, targetAudience))
+        .map(m => m.email)
+        .filter(Boolean);
 
     if (targetEmails.length === 0) {
       return showToast("No targets found for the selected sub-category.", "error");
@@ -330,7 +349,7 @@ export default function LeaderWorkspace() {
         targetScope: isNational ? "National" : isState ? "State" : "District",
         targetLocation: isNational ? "All India" : isState ? userData.state : `${userData.district}, ${userData.state}`,
         recipientCount: targetEmails.length,
-        sentBy: `${userData.name} (${userData.role})`,
+        sentBy: `${userData.name} (${userData.roleTitle || userData.role})`,
         status: "Sent",
         sentAt: serverTimestamp()
       });
@@ -358,21 +377,17 @@ export default function LeaderWorkspace() {
 
     setIsSavingSignature(true);
     try {
-      // Extracts a transparent PNG base64 string
       const signatureDataUrl = sigCanvas.current?.getTrimmedCanvas().toDataURL('image/png');
       
-      // Save directly to the user's member document
       await updateDoc(doc(db, "members", userData.id), {
         signatureData: signatureDataUrl,
         signatureUpdatedAt: serverTimestamp()
       });
 
-      // Force a slight delay to allow UI to catch up nicely
       setTimeout(() => {
         setShowSignatureModal(false);
         showToast("Official digital signature secured successfully.", "success");
         setIsSavingSignature(false);
-        // Force reload page to fetch fresh userdata payload
         window.location.reload(); 
       }, 500);
 
@@ -385,7 +400,7 @@ export default function LeaderWorkspace() {
 
   const filteredMembers = localMembers.filter(member => {
     const meetingTarget = selectedMeetingForAttendance?.targetAudience || "All";
-    if (!matchAudience(member.role, meetingTarget)) return false;
+    if (!matchAudience(member.roleLevel, member.roleTitle, member.role, meetingTarget)) return false;
     if (!rosterSearch.trim()) return true;
     const s = rosterSearch.toLowerCase();
     return (
@@ -397,7 +412,7 @@ export default function LeaderWorkspace() {
 
   if (loadingUser) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-[#007AFF]"/></div>;
   
-  if (!userData || !userData.role) {
+  if (!userData || (!userData.roleLevel && !userData.role)) {
     return (
       <div className="max-w-md mx-auto my-20 p-8 bg-white border border-red-200 rounded-3xl shadow-xl text-center space-y-4">
         <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto border-4 border-red-100">
@@ -437,7 +452,7 @@ export default function LeaderWorkspace() {
             <ClipboardList className="w-6 h-6 text-[#007AFF]" /> Leader Operations Workspace
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Jurisdiction Command: <strong className="text-gray-900 font-bold">{jurisdictionDisplay}</strong> | Role: <strong className="text-[#007AFF] font-bold">{userData.role.toUpperCase()}</strong>
+            Jurisdiction Command: <strong className="text-gray-900 font-bold">{jurisdictionDisplay}</strong> | Role: <strong className="text-[#007AFF] font-bold">{(userData.roleTitle || userData.role).toUpperCase()}</strong>
           </p>
         </div>
         
@@ -499,14 +514,12 @@ export default function LeaderWorkspace() {
               </div>
 
               <div className="p-6 bg-gray-50 flex flex-col items-center">
-                {/* Canvas Box */}
                 <div className="w-full bg-white border-2 border-dashed border-gray-300 rounded-2xl overflow-hidden shadow-inner relative">
                   <SignatureCanvas 
                     ref={sigCanvas}
                     penColor="#0f172a"
                     canvasProps={{ className: "w-full h-[250px] cursor-crosshair" }}
                   />
-                  {/* Subtle Baseline */}
                   <div className="absolute bottom-6 left-10 right-10 border-b border-gray-200 pointer-events-none"></div>
                 </div>
 
@@ -545,7 +558,6 @@ export default function LeaderWorkspace() {
               
               <form onSubmit={handleScheduleMeeting} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
-                {/* 🔥 DYNAMIC SUB-CATEGORY AUDIENCE SELECTOR WITH LIVE POSTS 🔥 */}
                 <div className="md:col-span-2 bg-blue-50/50 p-4 border border-blue-100 rounded-2xl mb-2">
                   <label className="text-[10px] font-black text-[#007AFF] uppercase tracking-widest flex items-center gap-1.5 mb-2">
                     <Target className="w-3.5 h-3.5" /> Select Target Cadre Audience
@@ -646,7 +658,7 @@ export default function LeaderWorkspace() {
                       <div>
                         <p className="font-bold text-gray-900 text-sm flex items-center gap-2">
                           {member.name}
-                          <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded border border-gray-200 uppercase">{member.role?.replace(/_/g, ' ') || 'Member'}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded border border-gray-200 uppercase">{member.roleTitle || member.role?.replace(/_/g, ' ') || 'Member'}</span>
                         </p>
                         <p className="text-[10px] text-gray-400 font-semibold mt-0.5">{member.email} | {member.phone}</p>
                       </div>
@@ -726,7 +738,6 @@ export default function LeaderWorkspace() {
 
               <form onSubmit={handleLocalBroadcast} className="space-y-4">
                 
-                {/* 🔥 DYNAMIC SUB-CATEGORY EMAIL SELECTOR 🔥 */}
                 <div className="bg-orange-50/50 p-4 border border-orange-100 rounded-2xl mb-2">
                   <label className="text-[10px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1.5 mb-2">
                     <Target className="w-3.5 h-3.5" /> Sub-Category Recipient Target

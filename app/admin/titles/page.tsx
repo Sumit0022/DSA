@@ -7,40 +7,46 @@ import { db } from "@/lib/firebase";
 import {
   ArrowLeft, Save, Plus, Trash2, GripVertical,
   Crown, Shield, Award, Loader2, CheckCircle2,
-  ShieldAlert, GitMerge, X, ChevronRight
+  ShieldAlert, GitMerge, X, ChevronRight, Users
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
-// ─── Types (unchanged) ─────────────────────────────────────────────────────────
-type TitleNode = { id: string; title: string };
+// ─── Types (Updated with maxLimit) ──────────────────────────────────────────
+type TitleNode = { id: string; title: string; maxLimit: number }; // Added maxLimit
 type RankTier  = { rank: number; titles: TitleNode[] };
 type HierarchyType = { National: RankTier[]; State: RankTier[]; District: RankTier[] };
 
 const DEFAULT_HIERARCHY: HierarchyType = {
   National: [
-    { rank: 1, titles: [{ id: "nat_1", title: "National President" }] },
-    { rank: 2, titles: [{ id: "nat_2", title: "National Vice President" }] },
+    { rank: 1, titles: [{ id: "nat_1", title: "National President", maxLimit: 1 }] },
+    { rank: 2, titles: [{ id: "nat_2", title: "National Vice President", maxLimit: 2 }] },
   ],
   State: [
-    { rank: 1, titles: [{ id: "st_1", title: "State President" }] },
-    { rank: 2, titles: [{ id: "st_2", title: "State Vice President" }] },
-    { rank: 3, titles: [{ id: "st_3", title: "State General Secretary" }, { id: "st_4", title: "State Joint Secretary" }] },
+    { rank: 1, titles: [{ id: "st_1", title: "State President", maxLimit: 1 }] },
+    { rank: 2, titles: [{ id: "st_2", title: "State Vice President", maxLimit: 3 }] },
+    { rank: 3, titles: [
+        { id: "st_3", title: "State General Secretary", maxLimit: 5 }, 
+        { id: "st_4", title: "State Joint Secretary", maxLimit: 10 }
+    ] },
   ],
   District: [
-    { rank: 1, titles: [{ id: "dist_1", title: "District President" }] },
-    { rank: 2, titles: [{ id: "dist_2", title: "District Vice President" }, { id: "dist_3", title: "District General Secretary" }] },
+    { rank: 1, titles: [{ id: "dist_1", title: "District President", maxLimit: 1 }] },
+    { rank: 2, titles: [
+        { id: "dist_2", title: "District Vice President", maxLimit: 5 }, 
+        { id: "dist_3", title: "District General Secretary", maxLimit: 5 }
+    ] },
   ],
 };
 
-// ─── Tab config ────────────────────────────────────────────────────────────────
+// ─── Tab config (unchanged) ──────────────────────────────────────────────────
 const TABS: { key: keyof HierarchyType; label: string; icon: React.ElementType; accent: string; badge: string }[] = [
   { key: "National", label: "National", icon: Crown,  accent: "#B8860B", badge: "bg-amber-50 text-amber-700 border-amber-200" },
   { key: "State",    label: "State",    icon: Shield, accent: "#007AFF", badge: "bg-blue-50 text-blue-700 border-blue-200"   },
   { key: "District", label: "District", icon: Award,  accent: "#6366F1", badge: "bg-indigo-50 text-indigo-700 border-indigo-200" },
 ];
 
-// ─── Tier pill colours (first tier gets special treatment) ────────────────────
+// ─── Tier pill colours (unchanged) ──────────────────────────────────────────
 const tierPillStyle = (isTop: boolean) =>
   isTop
     ? "bg-gray-900 text-white border-transparent"
@@ -53,6 +59,8 @@ export default function TitleManagement() {
   const [loading, setLoading]         = useState(true);
   const [isSaving, setIsSaving]       = useState(false);
   const [inputValues, setInputValues] = useState<Record<number, string>>({});
+  // 🆕 Naya state naye post ki limit input manage karne ke liye
+  const [inputLimits, setInputLimits] = useState<Record<number, string>>({}); 
   const [toast, setToast]             = useState<{ message: string; type: "success" | "error" | null }>({ message: "", type: null });
 
   // Drag refs (unchanged)
@@ -64,21 +72,46 @@ export default function TitleManagement() {
     setTimeout(() => setToast({ message: "", type: null }), 3500);
   };
 
-  // ── Fetch (unchanged logic) ─────────────────────────────────────────────────
+  // ── Fetch (Migrated to handle maxLimit) ─────────────────────────────────────
   useEffect(() => {
     const fetchHierarchy = async () => {
       try {
         const docRef  = doc(db, "settings", "roles_hierarchy");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          const data = docSnap.data();
-          const isNewSchema = data.National?.[0] && Array.isArray(data.National[0].titles);
-          if (isNewSchema) {
-            setHierarchy(data as HierarchyType);
+          const data = docSnap.data() as any; // Cast as any to check structure
+          
+          // Old Schema Check & Migration Logic
+          let needsMigration = false;
+          const migratedData: any = {};
+
+          TABS.forEach(tab => {
+             if (data[tab.key] && Array.isArray(data[tab.key])) {
+                migratedData[tab.key] = data[tab.key].map((tier: any) => ({
+                    ...tier,
+                    titles: Array.isArray(tier.titles) ? tier.titles.map((titleNode: any) => {
+                        // Agar purana data hai jisme maxLimit nahi hai, to use 1 assign karo
+                        if (titleNode.maxLimit === undefined) {
+                            needsMigration = true;
+                            return { ...titleNode, maxLimit: 1 };
+                        }
+                        return titleNode;
+                    }) : []
+                }));
+             } else {
+                 needsMigration = true; // Tab missing or wrong structure
+                 migratedData[tab.key] = DEFAULT_HIERARCHY[tab.key];
+             }
+          });
+
+          if (needsMigration) {
+             console.log("Migrating older titles schema to include maxLimit...");
+             await setDoc(docRef, { ...migratedData, updatedAt: serverTimestamp() }, { merge: true });
+             setHierarchy(migratedData as HierarchyType);
           } else {
-            await setDoc(docRef, DEFAULT_HIERARCHY);
-            setHierarchy(DEFAULT_HIERARCHY);
+             setHierarchy(data as HierarchyType);
           }
+          
         } else {
           await setDoc(docRef, DEFAULT_HIERARCHY);
           setHierarchy(DEFAULT_HIERARCHY);
@@ -113,17 +146,26 @@ export default function TitleManagement() {
     }
   };
 
-  // ── Mutations (unchanged logic) ─────────────────────────────────────────────
+  // ── Mutations (Updated with maxLimit logic) ──────────────────────────────────
   const handleAddTitleToTier = (rankIndex: number) => {
     const text = inputValues[rankIndex]?.trim();
     if (!text) return;
+
+    // 🆕 Parse current limit input, default to 1 if invalid or empty
+    const limitNum = parseInt(inputLimits[rankIndex], 10);
+    const finalLimit = (!isNaN(limitNum) && limitNum > 0) ? limitNum : 1;
+
     const updated = { ...hierarchy };
     updated[activeTab][rankIndex].titles.push({
       id: `${activeTab.toLowerCase()}_node_${Date.now()}`,
       title: text,
+      maxLimit: finalLimit, // 🆕 Assigning the max limit
     });
     setHierarchy(updated);
+    
+    // Clear inputs
     setInputValues({ ...inputValues, [rankIndex]: "" });
+    setInputLimits({ ...inputLimits, [rankIndex]: "" }); // Clear limit input
   };
 
   const handleAddNewTierLevel = () => {
@@ -162,7 +204,7 @@ export default function TitleManagement() {
 
   const activeTabConfig = TABS.find(t => t.key === activeTab)!;
 
-  // ── Loading state ───────────────────────────────────────────────────────────
+  // ── Loading state (unchanged) ───────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center h-[70vh] gap-4">
@@ -180,23 +222,15 @@ export default function TitleManagement() {
     );
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render (unchanged design/structure) ───────────────────────────────────────
   return (
     <>
-      {/*
-        ┌─────────────────────────────────────────────┐
-        │  Global style injection (no external deps)  │
-        └─────────────────────────────────────────────┘
-        Using a <style> tag so we can define custom CSS
-        without touching tailwind.config.
-      */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=DM+Mono:wght@400;500&display=swap');
 
         .cm-root { font-family: 'DM Sans', sans-serif; }
         .cm-mono  { font-family: 'DM Mono', monospace; }
 
-        /* Subtle grid background */
         .cm-grid-bg {
           background-color: #F8F9FB;
           background-image:
@@ -205,7 +239,6 @@ export default function TitleManagement() {
           background-size: 32px 32px;
         }
 
-        /* Rank connector line */
         .cm-tier-list { position: relative; }
         .cm-tier-list::before {
           content: '';
@@ -222,20 +255,17 @@ export default function TitleManagement() {
           .cm-tier-list::before { display: none; }
         }
 
-        /* Pill badge */
         .cm-pill {
           transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .cm-pill:hover { transform: translateY(-1px); }
 
-        /* Tier card entry */
         @keyframes tierSlideIn {
           from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
         }
         .cm-tier-card { animation: tierSlideIn 0.3s ease both; }
 
-        /* Tab ink underline */
         .cm-tab-active::after {
           content: '';
           position: absolute;
@@ -247,16 +277,13 @@ export default function TitleManagement() {
           background: currentColor;
         }
 
-        /* Input focus glow */
         .cm-input:focus {
           border-color: #007AFF;
           box-shadow: 0 0 0 3px rgba(0,122,255,0.12);
         }
 
-        /* Drag ghost */
         .cm-dragging { opacity: 0.4; }
 
-        /* Save pulse */
         @keyframes savePulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(0,122,255,0.4); }
           50%       { box-shadow: 0 0 0 8px rgba(0,122,255,0);  }
@@ -272,12 +299,12 @@ export default function TitleManagement() {
             {toast.type && (
               <motion.div
                 initial={{ opacity: 0, y: 24, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0,  scale: 1    }}
+                animate={{ opacity: 1, y: 0,   scale: 1     }}
                 exit={{   opacity: 0, y: 16, scale: 0.96  }}
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 className={`fixed bottom-6 right-6 z-[500] flex items-center gap-3 px-4 py-3.5 rounded-2xl shadow-xl text-sm max-w-xs border backdrop-blur-sm ${
                   toast.type === "success"
-                    ? "bg-gray-950/95 text-white border-gray-800"
+                    ? "bg-gray-900/95 text-white border-gray-800"
                     : "bg-red-50 text-red-700 border-red-200"
                 }`}
               >
@@ -339,7 +366,7 @@ export default function TitleManagement() {
               >
                 {isSaving
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
-                  : <><Save    className="w-4 h-4" />             Save Matrix</>
+                  : <><Save    className="w-4 h-4" /> Save Matrix</>
                 }
               </button>
             </div>
@@ -373,7 +400,6 @@ export default function TitleManagement() {
                   />
                   <span className="text-xs sm:text-sm">{tab.label}</span>
 
-                  {/* Active indicator bar */}
                   <AnimatePresence>
                     {isActive && (
                       <motion.div
@@ -411,7 +437,7 @@ export default function TitleManagement() {
                 <div>
                   <h2 className="text-base font-bold text-gray-950">{activeTab} Hierarchy</h2>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Drag rows to reorder · Add multiple posts per tier
+                    Drag rows to reorder · Add multiple posts per tier · Set persons limit
                   </p>
                 </div>
               </div>
@@ -441,7 +467,7 @@ export default function TitleManagement() {
                       onDragEnter={() => (dragOverItem.current = tierIdx)}
                       onDragEnd={handleRowSort}
                       onDragOver={e => e.preventDefault()}
-                      className="flex items-start gap-3 sm:gap-4 group relative z-10"
+                      className="flex items-start gap-3 sm:gap-4 group relative z-10 cm-tier-card" // Added cm-tier-card for animation
                     >
                       {/* Left: drag handle + rank bubble */}
                       <div className="flex flex-col items-center gap-2 pt-3.5 shrink-0">
@@ -452,7 +478,6 @@ export default function TitleManagement() {
                           <GripVertical className="w-4 h-4" />
                         </button>
 
-                        {/* Rank bubble */}
                         <div
                           className={`w-7 h-7 rounded-full border-2 flex items-center justify-center cm-mono text-[10px] font-bold transition-all ${
                             isTop
@@ -508,7 +533,7 @@ export default function TitleManagement() {
                                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                                 className={`text-xs italic font-medium py-1 ${isTop ? "text-gray-500" : "text-gray-400"}`}
                               >
-                                No posts yet — add one below
+                                No posts yet — add one below tracking person limits
                               </motion.p>
                             ) : (
                               titles.map(node => (
@@ -516,12 +541,17 @@ export default function TitleManagement() {
                                   key={node.id}
                                   layout
                                   initial={{ opacity: 0, scale: 0.88 }}
-                                  animate={{ opacity: 1, scale: 1    }}
+                                  animate={{ opacity: 1, scale: 1     }}
                                   exit={{   opacity: 0, scale: 0.88, transition: { duration: 0.15 } }}
                                   transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                                  className={`cm-pill inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl border text-xs font-semibold ${tierPillStyle(isTop)}`}
+                                  className={`cm-pill inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl border text-xs font-semibold ${tierPillStyle(isTop)}`}
                                 >
                                   <span>{node.title}</span>
+                                  {/* 🆕 Naya display section person limit ke liye */}
+                                  <span className={`cm-mono text-[10px] px-1.5 py-0.5 rounded ${isTop ? 'bg-white/10 text-gray-300' : 'bg-gray-100 text-gray-500' } flex items-center gap-1`}>
+                                     <Users className="w-2.5 h-2.5" />
+                                     Max: {node.maxLimit}
+                                  </span>
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteTitle(tierIdx, node.id)}
@@ -539,15 +569,30 @@ export default function TitleManagement() {
                           </AnimatePresence>
                         </div>
 
-                        {/* Add input */}
-                        <div className={`px-4 pb-4 flex gap-2 max-w-sm`}>
+                        {/* Add input area (Updated) */}
+                        <div className={`px-4 pb-4 flex gap-2 max-w-lg`}>
                           <input
                             type="text"
                             value={inputValues[tierIdx] || ""}
                             onChange={e => setInputValues({ ...inputValues, [tierIdx]: e.target.value })}
                             onKeyDown={e => e.key === "Enter" && handleAddTitleToTier(tierIdx)}
-                            placeholder="e.g. Joint Secretary…"
+                            placeholder="Post Title (e.g. Joint Secretary…)"
                             className={`cm-input flex-1 min-w-0 px-3 py-2 rounded-xl text-xs font-medium border outline-none transition-all ${
+                              isTop
+                                ? "bg-gray-900 border-gray-700 text-white placeholder:text-gray-600 focus:border-gray-500"
+                                : "bg-white border-gray-200 text-gray-800 placeholder:text-gray-400"
+                            }`}
+                          />
+                          {/* 🆕 Naya Numeric Input limit ke liye */}
+                          <input
+                            type="number"
+                            min="1"
+                            value={inputLimits[tierIdx] || ""}
+                            onChange={e => setInputLimits({ ...inputLimits, [tierIdx]: e.target.value })}
+                            onKeyDown={e => e.key === "Enter" && handleAddTitleToTier(tierIdx)}
+                            placeholder="Limit"
+                            title="Number of persons to be appointed for this post"
+                            className={`cm-input w-20 px-3 py-2 rounded-xl text-xs font-bold cm-mono border outline-none transition-all ${
                               isTop
                                 ? "bg-gray-900 border-gray-700 text-white placeholder:text-gray-600 focus:border-gray-500"
                                 : "bg-white border-gray-200 text-gray-800 placeholder:text-gray-400"
@@ -574,7 +619,7 @@ export default function TitleManagement() {
               </AnimatePresence>
             </div>
 
-            {/* Panel footer: Add new tier */}
+            {/* Panel footer: Add new tier (unchanged) */}
             <div className="px-5 pb-6 sm:px-7">
               <button
                 type="button"
@@ -587,7 +632,7 @@ export default function TitleManagement() {
             </div>
           </motion.div>
 
-          {/* ── Bottom hint ─────────────────────────────────────────────── */}
+          {/* ── Bottom hint (unchanged) ───────────────────────────────────────── */}
           <p className="text-center text-xs text-gray-400 cm-mono">
             Changes are local until you hit <strong className="text-gray-600">Save Matrix</strong>
           </p>

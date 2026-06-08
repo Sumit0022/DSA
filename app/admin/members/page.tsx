@@ -2,9 +2,9 @@
 "use client";
 
 import { useEffect, useState, useMemo, Suspense } from "react";
-import { collection, getDocs, query, orderBy, Timestamp, doc, updateDoc, deleteDoc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, Timestamp, doc, updateDoc, deleteDoc, getDoc, onSnapshot, where, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Search, Download, AlertCircle, CheckCircle2, ShieldCheck, X, Crown, Loader2, UserMinus, Trash2 } from "lucide-react";
+import { Search, Download, AlertCircle, CheckCircle2, ShieldCheck, X, Crown, Loader2, UserMinus, Trash2, AlertTriangle } from "lucide-react";
 import DigitalPass from "@/components/DigitalPass";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation"; 
@@ -45,9 +45,10 @@ function MembersLedgerContent() {
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 🔥 NEW STATES FOR DYNAMIC HIERARCHY 🔥
+  // 🔥 NEW STATES FOR DYNAMIC HIERARCHY & VACANCY 🔥
   const [hierarchyData, setHierarchyData] = useState<any>(null);
-  const [availableTitles, setAvailableTitles] = useState<string[]>([]);
+  const [leaders, setLeaders] = useState<any[]>([]);
+  const [vacancyData, setVacancyData] = useState<{title: string, maxLimit: number, filled: number, isAvailable: boolean}[]>([]);
 
   // FETCH DYNAMIC HIERARCHY TITLES
   useEffect(() => {
@@ -65,26 +66,65 @@ function MembersLedgerContent() {
     fetchHierarchy();
   }, []);
 
-  // EXTRACT TITLES BASED ON SELECTED LEVEL
+  // FETCH ALL LEADERS TO CALCULATE VACANCY
   useEffect(() => {
-    if (hierarchyData && hierarchyData[assignLevel]) {
+    const membersRef = collection(db, "members");
+    const q = query(membersRef, where("role", "!=", "member"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs: any[] = [];
+      snapshot.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+      // Filter out non-leaders just in case
+      setLeaders(docs.filter(d => d.role !== "active_member" && d.roleLevel));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // CALCULATE VACANCY FOR SELECTED LEVEL & MEMBER
+  useEffect(() => {
+    if (hierarchyData && hierarchyData[assignLevel] && selectedMemberForRole) {
       const tiers = hierarchyData[assignLevel];
-      const titles: string[] = [];
+      const computedVacancies: any[] = [];
+      
+      const targetState = selectedMemberForRole.state;
+      const targetDistrict = selectedMemberForRole.district;
+
       tiers.forEach((tier: any) => {
         if (tier.titles) {
-          tier.titles.forEach((t: any) => titles.push(t.title));
+          tier.titles.forEach((t: any) => {
+            // Count filled posts based on exact level and region
+            const filledCount = leaders.filter((l: any) => {
+              const levelMatch = l.roleLevel === assignLevel;
+              const titleMatch = l.roleTitle === t.title;
+              const regionMatch = assignLevel === "National" 
+                                  ? true 
+                                  : assignLevel === "State" 
+                                      ? l.state === targetState 
+                                      : l.state === targetState && l.district === targetDistrict;
+              
+              return levelMatch && titleMatch && regionMatch;
+            }).length;
+            
+            const max = t.maxLimit || 1;
+            computedVacancies.push({
+              title: t.title,
+              maxLimit: max,
+              filled: filledCount,
+              isAvailable: filledCount < max
+            });
+          });
         }
       });
-      setAvailableTitles(titles);
+      setVacancyData(computedVacancies);
       
       // Auto-select the first available title
-      if (titles.length > 0 && !titles.includes(assignTitle)) {
-        setAssignTitle(titles[0]);
-      } else if (titles.length === 0) {
+      const available = computedVacancies.filter(v => v.isAvailable);
+      if (available.length > 0 && !available.find(v => v.title === assignTitle)) {
+        setAssignTitle(available[0].title);
+      } else if (available.length === 0) {
         setAssignTitle("");
       }
     }
-  }, [hierarchyData, assignLevel]);
+  }, [hierarchyData, assignLevel, selectedMemberForRole, leaders]);
 
   const fetchMembers = async () => {
     setLoading(true);
@@ -145,7 +185,9 @@ function MembersLedgerContent() {
         role: combinedRoleDisplay,
         roleLevel: assignLevel,
         roleTitle: assignTitle,
-        roleLocation: location
+        roleLocation: location,
+        appointmentDate: serverTimestamp(),
+        termYears: 2 // Default term assign from ledger
       });
       
       setMembers(members.map(m => 
@@ -169,7 +211,7 @@ function MembersLedgerContent() {
     
     try {
       await updateDoc(doc(db, "members", selectedMemberForRole.id), {
-        role: null, roleLevel: null, roleTitle: null, roleLocation: null
+        role: null, roleLevel: null, roleTitle: null, roleLocation: null, appointmentDate: null, termYears: null
       });
       
       setMembers(members.map(m => 
@@ -191,10 +233,7 @@ function MembersLedgerContent() {
     if (!memberToDelete) return;
     setIsDeleting(true);
     try {
-      // Delete from Firestore
       await deleteDoc(doc(db, "members", memberToDelete.id));
-      
-      // Remove from local state to update UI immediately
       setMembers(members.filter(m => m.id !== memberToDelete.id));
       setMemberToDelete(null);
     } catch (error) {
@@ -273,7 +312,7 @@ function MembersLedgerContent() {
                       <p className="text-sm font-semibold text-gray-900">{member.district}, {member.state}</p>
                       {member.role ? (
                         <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-1 bg-amber-50 inline-block px-2 py-0.5 rounded-sm border border-amber-100/50">
-                          {member.role} ({member.roleLocation})
+                          {member.roleTitle || member.role} ({member.roleLocation})
                         </p>
                       ) : (
                         <p className="text-xs text-gray-400 mt-0.5">Citizen</p>
@@ -319,7 +358,6 @@ function MembersLedgerContent() {
                           </button>
                         </>
                       )}
-                      {/* 🔥 NEW DELETE BUTTON 🔥 */}
                       <button 
                         onClick={() => setMemberToDelete(member)}
                         className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
@@ -376,7 +414,7 @@ function MembersLedgerContent() {
                     <select 
                       value={assignLevel} 
                       onChange={(e) => setAssignLevel(e.target.value)}
-                      className="w-full mt-1 px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm"
+                      className="w-full mt-1 px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm text-gray-900"
                     >
                       <option value="District">District Level ({selectedMemberForRole.district})</option>
                       <option value="State">State Level ({selectedMemberForRole.state})</option>
@@ -389,16 +427,28 @@ function MembersLedgerContent() {
                     <select 
                       value={assignTitle} 
                       onChange={(e) => setAssignTitle(e.target.value)}
-                      className="w-full mt-1 px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm"
+                      className={`w-full mt-1 px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none shadow-sm text-gray-900 ${vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable) ? 'opacity-60 cursor-not-allowed' : 'focus:border-[#007AFF]'}`}
                     >
-                      {availableTitles.length > 0 ? (
-                        availableTitles.map((title) => (
-                          <option key={title} value={title}>{title}</option>
+                      {vacancyData.length > 0 ? (
+                        vacancyData.map((v) => (
+                          <option key={v.title} value={v.title} disabled={!v.isAvailable}>
+                            {v.title} {v.isAvailable ? `(${v.filled}/${v.maxLimit} Filled)` : `(No Vacancy - Full)`}
+                          </option>
                         ))
                       ) : (
                         <option value="" disabled>No posts defined for this tier.</option>
                       )}
                     </select>
+                    
+                    {/* RED ALERT FOR FULL POSTS */}
+                    {vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable) && (
+                      <div className="mt-3 flex items-start gap-1.5 p-3 bg-red-50 border border-red-100 rounded-lg">
+                        <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                        <p className="text-[11px] text-red-700 font-bold leading-tight uppercase tracking-wider">
+                          All posts in this jurisdiction are currently occupied. Cannot assign new roles.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -423,7 +473,7 @@ function MembersLedgerContent() {
                   )}
                   <button 
                     type="submit" 
-                    disabled={isUpdatingRole || !assignTitle}
+                    disabled={isUpdatingRole || !assignTitle || (vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable))}
                     className="flex-1 py-3.5 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isUpdatingRole ? <Loader2 className="w-5 h-5 animate-spin" /> : <Crown className="w-5 h-5" />}

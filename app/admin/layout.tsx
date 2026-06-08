@@ -4,7 +4,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, Mail, FileText, Settings, LogOut, Menu, X, Sunrise, Search, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Users, Mail, FileText, Settings, LogOut, Menu, X, Sunrise, Search, MessageSquare, Pyramid } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IndianRupee } from "lucide-react";
 import { Activity } from "lucide-react";
@@ -20,6 +20,7 @@ const sidebarLinks = [
   { name: "Petitions", href: "/admin/petitions", icon: Signature },
   { name: "Publishing Hub", href: "/admin/blog", icon: FileText },
   { name: "Donations", href: "/admin/donations", icon: IndianRupee},
+  { name: "Leadership", href: "/admin/manage-leaders", icon: Pyramid },
   { name: "Screening Inbox", href: "/admin/applications", icon: MessageSquare },
   { name: "System Settings", href: "/admin/settings", icon: Settings },
 ];

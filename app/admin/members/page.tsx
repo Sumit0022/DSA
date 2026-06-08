@@ -2,9 +2,9 @@
 "use client";
 
 import { useEffect, useState, useMemo, Suspense } from "react";
-import { collection, getDocs, query, orderBy, Timestamp, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, Timestamp, doc, updateDoc, deleteDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Search, Download, AlertCircle, CheckCircle2, ShieldCheck, X, Crown, Loader2, UserMinus } from "lucide-react";
+import { Search, Download, AlertCircle, CheckCircle2, ShieldCheck, X, Crown, Loader2, UserMinus, Trash2 } from "lucide-react";
 import DigitalPass from "@/components/DigitalPass";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation"; 
@@ -25,17 +25,6 @@ interface Member {
   joinedAt: Timestamp | any;
 }
 
-const POST_TITLES = [
-  "President",
-  "Working President",
-  "Vice President",
-  "General Secretary",
-  "Secretary",
-  "Chief Spokesperson",
-  "Treasurer",
-  "Executive Member"
-];
-
 function MembersLedgerContent() {
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get("search") || "";
@@ -46,10 +35,56 @@ function MembersLedgerContent() {
   
   const [selectedMemberForPass, setSelectedMemberForPass] = useState<Member | null>(null);
   
+  // ROLE ASSIGNMENT STATES
   const [selectedMemberForRole, setSelectedMemberForRole] = useState<Member | null>(null);
   const [assignLevel, setAssignLevel] = useState("District");
-  const [assignTitle, setAssignTitle] = useState(POST_TITLES[0]);
+  const [assignTitle, setAssignTitle] = useState("");
   const [isUpdatingRole, setIsUpdatingRole] = useState(false);
+
+  // DELETE MEMBER STATES
+  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // 🔥 NEW STATES FOR DYNAMIC HIERARCHY 🔥
+  const [hierarchyData, setHierarchyData] = useState<any>(null);
+  const [availableTitles, setAvailableTitles] = useState<string[]>([]);
+
+  // FETCH DYNAMIC HIERARCHY TITLES
+  useEffect(() => {
+    const fetchHierarchy = async () => {
+      try {
+        const docRef = doc(db, "settings", "roles_hierarchy");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setHierarchyData(docSnap.data());
+        }
+      } catch (error) {
+        console.error("Error fetching hierarchy:", error);
+      }
+    };
+    fetchHierarchy();
+  }, []);
+
+  // EXTRACT TITLES BASED ON SELECTED LEVEL
+  useEffect(() => {
+    if (hierarchyData && hierarchyData[assignLevel]) {
+      const tiers = hierarchyData[assignLevel];
+      const titles: string[] = [];
+      tiers.forEach((tier: any) => {
+        if (tier.titles) {
+          tier.titles.forEach((t: any) => titles.push(t.title));
+        }
+      });
+      setAvailableTitles(titles);
+      
+      // Auto-select the first available title
+      if (titles.length > 0 && !titles.includes(assignTitle)) {
+        setAssignTitle(titles[0]);
+      } else if (titles.length === 0) {
+        setAssignTitle("");
+      }
+    }
+  }, [hierarchyData, assignLevel]);
 
   const fetchMembers = async () => {
     setLoading(true);
@@ -93,7 +128,7 @@ function MembersLedgerContent() {
 
   const handleAssignRole = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedMemberForRole) return;
+    if (!selectedMemberForRole || !assignTitle) return;
     
     setIsUpdatingRole(true);
 
@@ -148,6 +183,25 @@ function MembersLedgerContent() {
       console.error("Error removing role:", error);
     } finally {
       setIsUpdatingRole(false);
+    }
+  };
+
+  // 🔥 DELETE MEMBER LOGIC 🔥
+  const handleDeleteMember = async () => {
+    if (!memberToDelete) return;
+    setIsDeleting(true);
+    try {
+      // Delete from Firestore
+      await deleteDoc(doc(db, "members", memberToDelete.id));
+      
+      // Remove from local state to update UI immediately
+      setMembers(members.filter(m => m.id !== memberToDelete.id));
+      setMemberToDelete(null);
+    } catch (error) {
+      console.error("Error deleting member:", error);
+      alert("Failed to wipe member records.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -249,7 +303,7 @@ function MembersLedgerContent() {
                             onClick={() => {
                               setSelectedMemberForRole(member);
                               setAssignLevel(member.roleLevel || "District");
-                              setAssignTitle(member.roleTitle || POST_TITLES[0]);
+                              setAssignTitle(member.roleTitle || "");
                             }}
                             className="p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                             title="Assign Hierarchy Role"
@@ -265,6 +319,14 @@ function MembersLedgerContent() {
                           </button>
                         </>
                       )}
+                      {/* 🔥 NEW DELETE BUTTON 🔥 */}
+                      <button 
+                        onClick={() => setMemberToDelete(member)}
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        title="Delete Citizen Record"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
                     </td>
 
                   </tr>
@@ -329,9 +391,13 @@ function MembersLedgerContent() {
                       onChange={(e) => setAssignTitle(e.target.value)}
                       className="w-full mt-1 px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm"
                     >
-                      {POST_TITLES.map((title) => (
-                        <option key={title} value={title}>{title}</option>
-                      ))}
+                      {availableTitles.length > 0 ? (
+                        availableTitles.map((title) => (
+                          <option key={title} value={title}>{title}</option>
+                        ))
+                      ) : (
+                        <option value="" disabled>No posts defined for this tier.</option>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -357,7 +423,7 @@ function MembersLedgerContent() {
                   )}
                   <button 
                     type="submit" 
-                    disabled={isUpdatingRole}
+                    disabled={isUpdatingRole || !assignTitle}
                     className="flex-1 py-3.5 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isUpdatingRole ? <Loader2 className="w-5 h-5 animate-spin" /> : <Crown className="w-5 h-5" />}
@@ -366,6 +432,40 @@ function MembersLedgerContent() {
                 </div>
               </form>
 
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 🔥 DELETE CONFIRMATION MODAL 🔥 */}
+      <AnimatePresence>
+        {memberToDelete && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl p-6 text-center">
+              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100 shadow-sm">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-black text-gray-900 mb-2">Delete Citizen Record?</h2>
+              <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                You are about to permanently delete <strong>{memberToDelete.name}</strong> from the database. This action cannot be reversed.
+              </p>
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setMemberToDelete(null)}
+                  disabled={isDeleting}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleDeleteMember}
+                  disabled={isDeleting}
+                  className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl shadow-md hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Forever"}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

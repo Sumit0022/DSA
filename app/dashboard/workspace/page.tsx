@@ -1,12 +1,13 @@
 // app/leader/workspace/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useUser } from "@/hooks/useUser";
-import { Calendar, Users, Mail, Video, MapPin, Loader2, CheckCircle2, ClipboardList, ShieldAlert, Plus, Send, Clock, UserCheck, X, Search, Eye, PlayCircle, Crosshair, MessageSquare, Target } from "lucide-react";
+import { Calendar, Users, Mail, Video, MapPin, Loader2, CheckCircle2, ClipboardList, ShieldAlert, Plus, Send, Clock, UserCheck, X, Search, Eye, PlayCircle, Crosshair, MessageSquare, Target, PenTool, RefreshCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import SignatureCanvas from 'react-signature-canvas';
 
 export default function LeaderWorkspace() {
   const { userData, loadingUser } = useUser();
@@ -55,9 +56,15 @@ export default function LeaderWorkspace() {
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [isDispatchingBroadcast, setIsDispatchingBroadcast] = useState(false);
 
-  // 🔥 NEW STATES FOR DYNAMIC HIERARCHY 🔥
+  // 4. DYNAMIC HIERARCHY STATES
   const [hierarchyData, setHierarchyData] = useState<any>(null);
   const [dynamicOptions, setDynamicOptions] = useState<{label: string, value: string}[]>([]);
+
+  // 🔥 5. DIGITAL SIGNATURE STATES 🔥
+  const sigCanvas = useRef<SignatureCanvas>(null);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [isSavingSignature, setIsSavingSignature] = useState(false);
+  const hasSignature = !!userData?.signatureData; // check if Base64 string exists
 
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | null }>({ message: "", type: null });
 
@@ -139,12 +146,11 @@ export default function LeaderWorkspace() {
     }
   }, [hierarchyData, isNational, isState, isDistrict]);
 
-  // 🔥 ADVANCED AUDIENCE MATCHER ENGINE 🔥
+  // ADVANCED AUDIENCE MATCHER ENGINE
   const matchAudience = (memberRole: string, targetValue: string) => {
     const r = (memberRole || "").toLowerCase();
     const t = targetValue.toLowerCase();
 
-    // Specific "All" broad categories
     if (t === "all state leaders" || t === "all state subordinate leaders") return r.includes("state");
     if (t === "all district leaders") return r.includes("district");
     if (t === "all state & district leaders") return r.includes("state") || r.includes("district");
@@ -152,8 +158,6 @@ export default function LeaderWorkspace() {
     if (t === "all district & ground cadre") return !r.includes("state") && !r.includes("national");
     if (t === "active members only") return r === "active_member" || r === "member";
 
-    // Dynamic Exact Match (e.g. "State President")
-    // Note: The dropdown value now perfectly matches the exact combined string from hierarchy
     return r === t; 
   };
 
@@ -342,13 +346,46 @@ export default function LeaderWorkspace() {
     }
   };
 
+  // 🔥 DIGITAL SIGNATURE CLEAR & SAVE LOGIC 🔥
+  const clearSignature = () => {
+    sigCanvas.current?.clear();
+  };
+
+  const saveSignature = async () => {
+    if (sigCanvas.current?.isEmpty()) {
+      return showToast("Please draw your signature first.", "error");
+    }
+
+    setIsSavingSignature(true);
+    try {
+      // Extracts a transparent PNG base64 string
+      const signatureDataUrl = sigCanvas.current?.getTrimmedCanvas().toDataURL('image/png');
+      
+      // Save directly to the user's member document
+      await updateDoc(doc(db, "members", userData.id), {
+        signatureData: signatureDataUrl,
+        signatureUpdatedAt: serverTimestamp()
+      });
+
+      // Force a slight delay to allow UI to catch up nicely
+      setTimeout(() => {
+        setShowSignatureModal(false);
+        showToast("Official digital signature secured successfully.", "success");
+        setIsSavingSignature(false);
+        // Force reload page to fetch fresh userdata payload
+        window.location.reload(); 
+      }, 500);
+
+    } catch (error) {
+      console.error("Error saving signature", error);
+      showToast("Failed to upload signature. Check connection.", "error");
+      setIsSavingSignature(false);
+    }
+  };
+
   const filteredMembers = localMembers.filter(member => {
     const meetingTarget = selectedMeetingForAttendance?.targetAudience || "All";
-    
-    // 1. Strict Filter by Target Category
     if (!matchAudience(member.role, meetingTarget)) return false;
-
-    // 2. Search Text Filter
     if (!rosterSearch.trim()) return true;
     const s = rosterSearch.toLowerCase();
     return (
@@ -359,6 +396,7 @@ export default function LeaderWorkspace() {
   });
 
   if (loadingUser) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-[#007AFF]"/></div>;
+  
   if (!userData || !userData.role) {
     return (
       <div className="max-w-md mx-auto my-20 p-8 bg-white border border-red-200 rounded-3xl shadow-xl text-center space-y-4">
@@ -412,6 +450,88 @@ export default function LeaderWorkspace() {
           </button>
         </div>
       </div>
+
+      {/* 🔥 SIGNATURE REQUIREMENT BANNER 🔥 */}
+      {!hasSignature && (
+        <div className="bg-red-50 border border-red-200 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-5"><PenTool className="w-24 h-24" /></div>
+          <div className="flex items-start gap-4 relative z-10">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-red-900">Mandatory Action Required</h3>
+              <p className="text-sm font-medium text-red-700 mt-1 max-w-2xl">
+                Your official digital signature is missing. This signature is strictly required to digitally authorize public petitions and campaign posters originating from your jurisdiction.
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={() => setShowSignatureModal(true)}
+            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-md transition-all flex items-center gap-2 shrink-0 relative z-10 w-full sm:w-auto justify-center"
+          >
+            <PenTool className="w-4 h-4" /> Draw Digital Signature
+          </button>
+        </div>
+      )}
+
+      {/* 🚀 DIGITAL SIGNATURE WHITEBOARD MODAL 🚀 */}
+      <AnimatePresence>
+        {showSignatureModal && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="p-6 border-b border-gray-100 flex items-start justify-between bg-gray-50/50">
+                <div>
+                  <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
+                    <PenTool className="w-5 h-5 text-[#007AFF]" /> Signature Authorization
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-1">Please sign cleanly within the box below. Use your mouse or finger.</p>
+                </div>
+                <button onClick={() => setShowSignatureModal(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 bg-gray-50 flex flex-col items-center">
+                {/* Canvas Box */}
+                <div className="w-full bg-white border-2 border-dashed border-gray-300 rounded-2xl overflow-hidden shadow-inner relative">
+                  <SignatureCanvas 
+                    ref={sigCanvas}
+                    penColor="#0f172a"
+                    canvasProps={{ className: "w-full h-[250px] cursor-crosshair" }}
+                  />
+                  {/* Subtle Baseline */}
+                  <div className="absolute bottom-6 left-10 right-10 border-b border-gray-200 pointer-events-none"></div>
+                </div>
+
+                <div className="w-full flex items-center justify-between mt-4">
+                  <button 
+                    onClick={clearSignature}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-900 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors"
+                  >
+                    <RefreshCcw className="w-3.5 h-3.5" /> Clear & Retry
+                  </button>
+
+                  <button 
+                    onClick={saveSignature}
+                    disabled={isSavingSignature}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-[#007AFF] text-white font-bold text-sm rounded-xl shadow-md hover:bg-blue-600 transition-all disabled:opacity-50"
+                  >
+                    {isSavingSignature ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    {isSavingSignature ? "Securing..." : "Save Signature"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         

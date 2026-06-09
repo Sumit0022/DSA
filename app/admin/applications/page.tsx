@@ -2,9 +2,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, ShieldCheck, XCircle, CheckCircle, Send, MessageSquare, MapPin, Paperclip, Info, Phone, Mail, Clock, User, Loader2, X, ArrowLeft, Crown, CalendarDays, Power } from "lucide-react";
+import { Search, ShieldCheck, XCircle, CheckCircle, Send, MessageSquare, MapPin, Paperclip, Info, Phone, Mail, Clock, User, Loader2, X, ArrowLeft, Crown, CalendarDays, Power, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, getDoc } from "firebase/firestore";
+import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, getDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 const TERM_LENGTHS = ["6 Months", "1 Year", "2 Years", "3 Years", "5 Years"];
@@ -21,9 +21,10 @@ export default function ApplicationsInbox() {
   // INTAKE TOGGLE STATE
   const [isIntakeOpen, setIsIntakeOpen] = useState(true);
 
-  // 🔥 DYNAMIC HIERARCHY STATES 🔥
+  // 🔥 DYNAMIC HIERARCHY STATES & VACANCY 🔥
   const [hierarchyData, setHierarchyData] = useState<any>(null);
-  const [availableTitles, setAvailableTitles] = useState<string[]>([]);
+  const [leaders, setLeaders] = useState<any[]>([]);
+  const [vacancyData, setVacancyData] = useState<{title: string, maxLimit: number, filled: number, isAvailable: boolean}[]>([]);
 
   // ROLE ASSIGNMENT STATES
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -53,25 +54,71 @@ export default function ApplicationsInbox() {
     fetchHierarchy();
   }, []);
 
-  // EXTRACT TITLES BASED ON SELECTED ASSIGN LEVEL
+  // FETCH ALL LEADERS TO CALCULATE VACANCY
   useEffect(() => {
-    if (hierarchyData && hierarchyData[assignLevel]) {
+    const membersRef = collection(db, "members");
+    const q = query(membersRef, where("role", "!=", "member"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs: any[] = [];
+      snapshot.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+      setLeaders(docs.filter(d => d.role !== "active_member" && d.roleLevel));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // CALCULATE VACANCY FOR SELECTED LEVEL & APPLICATION TARGET
+  useEffect(() => {
+    if (hierarchyData && hierarchyData[assignLevel] && activeApp) {
       const tiers = hierarchyData[assignLevel];
-      const titles: string[] = [];
+      const computedVacancies: any[] = [];
+      
+      const targetState = activeApp.state;
+      const targetDistrict = activeApp.district;
+
       tiers.forEach((tier: any) => {
         if (tier.titles) {
-          tier.titles.forEach((t: any) => titles.push(t.title));
+          tier.titles.forEach((t: any) => {
+            // Count filled posts based on exact level and region
+            const filledCount = leaders.filter((l: any) => {
+              const levelMatch = l.roleLevel === assignLevel;
+              const titleMatch = l.roleTitle === t.title;
+              const regionMatch = assignLevel === "National" 
+                                  ? true 
+                                  : assignLevel === "State" 
+                                      ? l.state === targetState 
+                                      : l.state === targetState && l.district === targetDistrict;
+              
+              return levelMatch && titleMatch && regionMatch;
+            }).length;
+            
+            const max = t.maxLimit || 1;
+            computedVacancies.push({
+              title: t.title,
+              maxLimit: max,
+              filled: filledCount,
+              isAvailable: filledCount < max
+            });
+          });
         }
       });
-      setAvailableTitles(titles);
+      setVacancyData(computedVacancies);
       
-      if (titles.length > 0 && !titles.includes(assignTitle)) {
-        setAssignTitle(titles[0]);
-      } else if (titles.length === 0) {
-        setAssignTitle("");
+      // Auto-select the first available title OR fallback to the requested title if it's valid
+      const requestedTitle = activeApp.requestedRole ? activeApp.requestedRole.replace(`${assignLevel} `, "") : "";
+      const requestedPostData = computedVacancies.find(v => v.title === requestedTitle);
+      
+      if (requestedPostData && requestedPostData.isAvailable) {
+        setAssignTitle(requestedTitle);
+      } else {
+        const available = computedVacancies.filter(v => v.isAvailable);
+        if (available.length > 0 && !available.find(v => v.title === assignTitle)) {
+          setAssignTitle(available[0].title);
+        } else if (available.length === 0) {
+          setAssignTitle("");
+        }
       }
     }
-  }, [hierarchyData, assignLevel]);
+  }, [hierarchyData, assignLevel, activeApp, leaders]);
 
   // FETCH LIVE APPLICATIONS & INTAKE SETTINGS
   useEffect(() => {
@@ -202,8 +249,8 @@ export default function ApplicationsInbox() {
         roleLevel: assignLevel,
         roleTitle: assignTitle,
         roleLocation: location,
-        appointedAt: serverTimestamp(),
-        termLength: assignTerm
+        appointmentDate: serverTimestamp(), // Replaced appointedAt with appointmentDate for consistency with dashboard
+        termYears: parseInt(assignTerm) // Standardized to number format
       });
 
       // 2. Auto Congratulations Message & Status update
@@ -343,7 +390,7 @@ export default function ApplicationsInbox() {
         )}
       </div>
 
-      {/* ROLE ASSIGNMENT MODAL (WITH DYNAMIC HIERARCHY TITLES) */}
+      {/* ROLE ASSIGNMENT MODAL (SMART VACANCY INTEGRATION) */}
       <AnimatePresence>
         {showRoleModal && activeApp && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -359,7 +406,7 @@ export default function ApplicationsInbox() {
                 <div className="space-y-3 md:space-y-4">
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Jurisdiction Level</label>
-                    <select value={assignLevel} onChange={(e) => setAssignLevel(e.target.value)} className="w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm">
+                    <select value={assignLevel} onChange={(e) => setAssignLevel(e.target.value)} className="w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm text-gray-900">
                       <option value="District">District ({activeApp.district})</option>
                       <option value="State">State ({activeApp.state})</option>
                       <option value="National">National (India)</option>
@@ -367,22 +414,44 @@ export default function ApplicationsInbox() {
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Official Post</label>
-                    <select value={assignTitle} onChange={(e) => setAssignTitle(e.target.value)} className="w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm">
-                      {availableTitles.length > 0 ? (
-                        availableTitles.map((title) => <option key={title} value={title}>{title}</option>)
+                    <select 
+                      value={assignTitle} 
+                      onChange={(e) => setAssignTitle(e.target.value)} 
+                      className={`w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none shadow-sm text-gray-900 ${vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable) ? 'opacity-60 cursor-not-allowed' : 'focus:border-[#007AFF]'}`}
+                    >
+                      {vacancyData.length > 0 ? (
+                        vacancyData.map((v) => (
+                          <option key={v.title} value={v.title} disabled={!v.isAvailable}>
+                            {v.title} {v.isAvailable ? `(${v.filled}/${v.maxLimit} Filled)` : `(No Vacancy - Full)`}
+                          </option>
+                        ))
                       ) : (
                         <option value="" disabled>No posts defined for this tier.</option>
                       )}
                     </select>
+
+                    {/* RED ALERT FOR FULL POSTS */}
+                    {vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable) && (
+                      <div className="mt-3 flex items-start gap-1.5 p-3 bg-red-50 border border-red-100 rounded-lg">
+                        <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                        <p className="text-[11px] text-red-700 font-bold leading-tight uppercase tracking-wider">
+                          All posts in this jurisdiction are currently occupied. Cannot approve new roles.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Term Length</label>
-                    <select value={assignTerm} onChange={(e) => setAssignTerm(e.target.value)} className="w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm">
+                    <select value={assignTerm} onChange={(e) => setAssignTerm(e.target.value)} className="w-full mt-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-[#007AFF] outline-none shadow-sm text-gray-900">
                       {TERM_LENGTHS.map((term) => <option key={term} value={term}>{term}</option>)}
                     </select>
                   </div>
                 </div>
-                <button type="submit" disabled={isProcessing || !assignTitle} className="w-full py-3 md:py-3.5 bg-green-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-4">
+                <button 
+                  type="submit" 
+                  disabled={isProcessing || !assignTitle || (vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable))} 
+                  className="w-full py-3 md:py-3.5 bg-green-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
+                >
                   {isProcessing ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Crown className="w-4 h-4 md:w-5 md:h-5" />}
                   Confirm Appointment
                 </button>

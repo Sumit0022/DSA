@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { collection, query, where, orderBy, onSnapshot, writeBatch, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useUser } from "@/hooks/useUser";
-import { Bell, CheckCircle2, Info, ShieldAlert, CheckCheck, Loader2, ArrowLeft } from "lucide-react";
+import { Bell, CheckCircle2, Info, ShieldAlert, CheckCheck, Loader2, ArrowLeft, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
@@ -16,6 +16,7 @@ interface Notification {
   type: "success" | "alert" | "info";
   isRead: boolean;
   timestamp: any;
+  link?: string; // 🚀 New Link Property
 }
 
 export default function NotificationsPage() {
@@ -146,6 +147,13 @@ export default function NotificationsPage() {
                   <p className={`text-xs md:text-sm leading-relaxed ${!notif.isRead ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
                     {notif.message}
                   </p>
+                  
+                  {/* 🚀 DYNAMIC ACTION LINK BUTTON 🚀 */}
+                  {notif.link && (
+                    <Link href={notif.link} className="inline-flex items-center gap-1.5 mt-3 text-[10px] md:text-xs font-black text-[#007AFF] bg-white border border-[#007AFF]/20 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors shadow-sm w-max">
+                      View Action Page <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  )}
                 </div>
               </motion.div>
             ))}

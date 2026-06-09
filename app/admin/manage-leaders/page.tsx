@@ -2,13 +2,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, query, where, getDocs, doc, getDoc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, serverTimestamp, onSnapshot, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useUser } from "@/hooks/useUser";
 import { 
   Users, Crown, Shield, Award, Search, UserPlus, 
   ArrowUpRight, UserX, Loader2, CheckCircle2, ShieldAlert, 
-  X, MapPin, CalendarClock, Briefcase, ChevronRight, AlertTriangle
+  X, MapPin, CalendarClock, Briefcase, ChevronRight, AlertTriangle, Star
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -51,6 +51,22 @@ export default function ManageLeadersPage() {
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
     setTimeout(() => setToast({ message: "", type: null }), 4000);
+  };
+
+  // ─── NOTIFICATION DISPATCHER HELPER ───
+  const sendNotification = async (userId: string, title: string, message: string, type: "success" | "alert" | "info") => {
+    try {
+      await addDoc(collection(db, "notifications"), {
+        userId,
+        title,
+        message,
+        type,
+        isRead: false,
+        timestamp: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Notification Dispatch Error:", error);
+    }
   };
 
   // ─── INITIAL FETCH ───────────────────────────────────────────────────
@@ -137,7 +153,6 @@ export default function ManageLeadersPage() {
       if (snap.empty) {
         showToast("No citizen found with this number.", "error");
       } else {
-        // FIXED THE TYPESCRIPT ERROR HERE BY ASSIGNING ': any'
         const member: any = { id: snap.docs[0].id, ...snap.docs[0].data() };
         if (member.roleTitle) showToast("Warning: This member already holds a post.", "error");
         setFoundMember(member);
@@ -151,7 +166,12 @@ export default function ManageLeadersPage() {
     if (!foundMember || !selectedPost) return showToast("Select a member and a post.", "error");
     setIsProcessing(true);
     try {
+      const combinedRoleDisplay = selectedPost.toLowerCase().includes(activeTab.toLowerCase()) 
+  ? selectedPost 
+  : activeTab === "National" ? `National ${selectedPost}` : `${activeTab} ${selectedPost}`;
+      
       await updateDoc(doc(db, "members", foundMember.id), {
+        role: combinedRoleDisplay,
         roleLevel: activeTab,
         roleTitle: selectedPost,
         state: activeTab !== "National" ? selectedState : null,
@@ -159,6 +179,15 @@ export default function ManageLeadersPage() {
         appointmentDate: serverTimestamp(),
         termYears: Number(termYears)
       });
+      
+      // Dispatch Notification
+      await sendNotification(
+        foundMember.id, 
+        "Official Appointment Confirmed", 
+        `You have been officially appointed as the ${combinedRoleDisplay}. Please review your workspace for operational directives.`, 
+        "success"
+      );
+
       showToast(`${foundMember.name} appointed as ${selectedPost}`, "success");
       setAppointModal(false); resetForms();
     } catch (err) { showToast("Failed to appoint.", "error"); }
@@ -169,12 +198,26 @@ export default function ManageLeadersPage() {
     if (!promoteModal || !selectedPost) return;
     setIsProcessing(true);
     try {
+      const combinedRoleDisplay = selectedPost.toLowerCase().includes(activeTab.toLowerCase()) 
+  ? selectedPost 
+  : activeTab === "National" ? `National ${selectedPost}` : `${activeTab} ${selectedPost}`;
+      
       await updateDoc(doc(db, "members", promoteModal.id), {
+        role: combinedRoleDisplay,
         roleLevel: activeTab,
         roleTitle: selectedPost,
         appointmentDate: serverTimestamp(), // Reset term clock on promotion
         termYears: Number(termYears)
       });
+      
+      // Dispatch Notification
+      await sendNotification(
+        promoteModal.id, 
+        "Promotion Authorized", 
+        `Congratulations! You have been promoted to the rank of ${combinedRoleDisplay}. Your term clock has been reset. Lead with integrity!`, 
+        "success"
+      );
+
       showToast(`Promoted to ${selectedPost}`, "success");
       setPromoteModal(null); resetForms();
     } catch (err) { showToast("Failed to promote.", "error"); }
@@ -185,12 +228,24 @@ export default function ManageLeadersPage() {
     if (!dismissModal) return;
     setIsProcessing(true);
     try {
+      const pastRole = dismissModal.role || dismissModal.roleTitle;
+      
       await updateDoc(doc(db, "members", dismissModal.id), {
+        role: null,
         roleLevel: null,
         roleTitle: null,
         appointmentDate: null,
         termYears: null
       });
+
+      // Dispatch Notification
+      await sendNotification(
+        dismissModal.id, 
+        "Command Clearance Revoked", 
+        `Your assignment as ${pastRole} has been terminated by the High Command. Your access to the leadership workspace is now restricted.`, 
+        "alert"
+      );
+
       showToast(`${dismissModal.name} has been dismissed from post.`, "success");
       setDismissModal(null);
     } catch (err) { showToast("Failed to dismiss.", "error"); }
@@ -361,14 +416,16 @@ export default function ManageLeadersPage() {
                 <th className="px-6 py-4 font-black">Designated Post</th>
                 <th className="px-6 py-4 font-black">Appointed On</th>
                 <th className="px-6 py-4 font-black">Term Limit</th>
+                {/* 🔥 PHASE 4: POINTS DISPLAY ADDED HERE 🔥 */}
+                <th className="px-6 py-4 font-black text-center">Merit Points</th>
                 <th className="px-6 py-4 font-black text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {(!selectedState && activeTab !== "National") || (activeTab === "District" && !selectedDistrict) ? (
-                <tr><td colSpan={5} className="px-6 py-16 text-center text-gray-400 text-sm font-bold">Awaiting Jurisdiction Selection...</td></tr>
+                <tr><td colSpan={6} className="px-6 py-16 text-center text-gray-400 text-sm font-bold">Awaiting Jurisdiction Selection...</td></tr>
               ) : leaders.length === 0 ? (
-                <tr><td colSpan={5} className="px-6 py-16 text-center text-gray-400 text-sm font-bold">No officers appointed in this region.</td></tr>
+                <tr><td colSpan={6} className="px-6 py-16 text-center text-gray-400 text-sm font-bold">No officers appointed in this region.</td></tr>
               ) : (
                 leaders.map(leader => {
                   const termInfo = calculateTerm(leader.appointmentDate, leader.termYears || 2);
@@ -392,6 +449,14 @@ export default function ManageLeadersPage() {
                           <span className={`text-xs font-bold ${termInfo.color}`}>{termInfo.text}</span>
                         </div>
                       </td>
+                      
+                      {/* 🔥 PHASE 4: POINTS RENDERED HERE 🔥 */}
+                      <td className="px-6 py-4 text-center">
+                        <span className="inline-flex items-center gap-1 font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded border border-amber-200 text-xs">
+                          <Star className="w-3.5 h-3.5 fill-amber-500" /> {leader.points || 0}
+                        </span>
+                      </td>
+
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => setPromoteModal(leader)} className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-black transition-colors">
@@ -444,11 +509,17 @@ export default function ManageLeadersPage() {
                       <p className="text-sm font-black text-gray-900">{foundMember.name}</p>
                       <p className="text-xs text-gray-500 font-mono mt-0.5">{foundMember.phone}</p>
                     </div>
-                    {foundMember.roleTitle ? (
-                      <span className="px-2 py-1 bg-red-100 text-red-600 rounded text-[9px] font-black uppercase">Already Holding Post</span>
-                    ) : (
-                      <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[9px] font-black uppercase">Cleared for Duty</span>
-                    )}
+                    <div className="flex flex-col items-end gap-1">
+                      {foundMember.roleTitle ? (
+                        <span className="px-2 py-1 bg-red-100 text-red-600 rounded text-[9px] font-black uppercase">Already Holding Post</span>
+                      ) : (
+                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[9px] font-black uppercase">Cleared for Duty</span>
+                      )}
+                      {/* 🔥 PHASE 4: POINTS SHOWN IN SEARCH RESULT 🔥 */}
+                      <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
+                        <Star className="w-3 h-3 fill-amber-500" /> {foundMember.points || 0} Pts
+                      </span>
+                    </div>
                   </motion.div>
                 )}
 

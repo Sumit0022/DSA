@@ -2,9 +2,9 @@
 "use client";
 
 import { useEffect, useState, useMemo, Suspense } from "react";
-import { collection, getDocs, query, orderBy, Timestamp, doc, updateDoc, deleteDoc, getDoc, onSnapshot, where, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, Timestamp, doc, updateDoc, deleteDoc, getDoc, onSnapshot, where, serverTimestamp, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Search, Download, AlertCircle, CheckCircle2, ShieldCheck, X, Crown, Loader2, UserMinus, Trash2, AlertTriangle } from "lucide-react";
+import { Search, Download, AlertCircle, CheckCircle2, ShieldCheck, X, Crown, Loader2, UserMinus, Trash2, AlertTriangle, Star } from "lucide-react";
 import DigitalPass from "@/components/DigitalPass";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation"; 
@@ -22,6 +22,7 @@ interface Member {
   roleLevel?: string;
   roleTitle?: string;
   roleLocation?: string;
+  points?: number; // 🔥 Points logic added
   joinedAt: Timestamp | any;
 }
 
@@ -49,6 +50,22 @@ function MembersLedgerContent() {
   const [hierarchyData, setHierarchyData] = useState<any>(null);
   const [leaders, setLeaders] = useState<any[]>([]);
   const [vacancyData, setVacancyData] = useState<{title: string, maxLimit: number, filled: number, isAvailable: boolean}[]>([]);
+
+  // ─── NOTIFICATION DISPATCHER HELPER ───
+  const sendNotification = async (userId: string, title: string, message: string, type: "success" | "alert" | "info") => {
+    try {
+      await addDoc(collection(db, "notifications"), {
+        userId,
+        title,
+        message,
+        type,
+        isRead: false,
+        timestamp: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Notification Dispatch Error:", error);
+    }
+  };
 
   // FETCH DYNAMIC HIERARCHY TITLES
   useEffect(() => {
@@ -176,9 +193,9 @@ function MembersLedgerContent() {
     if (assignLevel === "District") location = selectedMemberForRole.district;
     if (assignLevel === "State") location = selectedMemberForRole.state;
 
-    const combinedRoleDisplay = assignLevel === "National" 
-      ? `National ${assignTitle}` 
-      : `${assignLevel} ${assignTitle}`;
+    const combinedRoleDisplay = assignTitle.toLowerCase().includes(assignLevel.toLowerCase()) 
+  ? assignTitle 
+  : assignLevel === "National" ? `National ${assignTitle}` : `${assignLevel} ${assignTitle}`;
 
     try {
       await updateDoc(doc(db, "members", selectedMemberForRole.id), {
@@ -190,6 +207,14 @@ function MembersLedgerContent() {
         termYears: 2 // Default term assign from ledger
       });
       
+      // 🔥 Dispatch Notification for Appointment 🔥
+      await sendNotification(
+        selectedMemberForRole.id, 
+        "Official Appointment Confirmed", 
+        `You have been officially appointed as the ${combinedRoleDisplay}. Please review your workspace for operational directives.`, 
+        "success"
+      );
+
       setMembers(members.map(m => 
         m.id === selectedMemberForRole.id 
           ? { ...m, role: combinedRoleDisplay, roleLevel: assignLevel, roleTitle: assignTitle, roleLocation: location } 
@@ -210,10 +235,20 @@ function MembersLedgerContent() {
     setIsUpdatingRole(true);
     
     try {
+      const pastRole = selectedMemberForRole.role || selectedMemberForRole.roleTitle;
+
       await updateDoc(doc(db, "members", selectedMemberForRole.id), {
         role: null, roleLevel: null, roleTitle: null, roleLocation: null, appointmentDate: null, termYears: null
       });
       
+      // 🔥 Dispatch Notification for Removal 🔥
+      await sendNotification(
+        selectedMemberForRole.id, 
+        "Command Clearance Revoked", 
+        `Your assignment as ${pastRole} has been terminated by the High Command. Your access to the leadership workspace is now restricted.`, 
+        "alert"
+      );
+
       setMembers(members.map(m => 
         m.id === selectedMemberForRole.id 
           ? { ...m, role: undefined, roleLevel: undefined, roleTitle: undefined, roleLocation: undefined } 
@@ -277,16 +312,18 @@ function MembersLedgerContent() {
                 <th className="px-6 py-5 font-bold">Identity</th>
                 <th className="px-6 py-5 font-bold">Contact</th>
                 <th className="px-6 py-5 font-bold">Region & Post</th>
-                <th className="px-6 py-5 font-bold">Status</th>
+                {/* 🔥 POINTS ADDED TO TABLE HEADER 🔥 */}
+                <th className="px-6 py-5 font-bold text-center">Action Pts</th>
+                <th className="px-6 py-5 font-bold text-center">Status</th>
                 <th className="px-6 py-5 font-bold text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               
               {loading ? (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-sm font-medium text-gray-400">Loading secure ledger...</td></tr>
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-sm font-medium text-gray-400">Loading secure ledger...</td></tr>
               ) : filteredMembers.length === 0 ? (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-sm font-medium text-gray-400">No records found matching "{searchQuery}"</td></tr>
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-sm font-medium text-gray-400">No records found matching "{searchQuery}"</td></tr>
               ) : (
                 filteredMembers.map((member) => (
                   <tr key={member.id} className="hover:bg-gray-50/50 transition-colors group">
@@ -319,7 +356,14 @@ function MembersLedgerContent() {
                       )}
                     </td>
 
-                    <td className="px-6 py-4">
+                    {/* 🔥 POINTS VALUE RENDERED 🔥 */}
+                    <td className="px-6 py-4 text-center">
+                      <span className="inline-flex items-center gap-1 font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200 text-xs">
+                        <Star className="w-3.5 h-3.5 fill-amber-500" /> {member.points || 0}
+                      </span>
+                    </td>
+
+                    <td className="px-6 py-4 text-center">
                       {member.status === "active_member" ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-50 text-[10px] font-bold tracking-widest text-[#34C759] uppercase border border-green-100/50">
                           <CheckCircle2 className="w-3 h-3" /> Active

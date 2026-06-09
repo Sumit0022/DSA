@@ -2,9 +2,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, ShieldCheck, XCircle, CheckCircle, Send, MessageSquare, MapPin, Paperclip, Info, Phone, Mail, Clock, User, Loader2, X, ArrowLeft, Crown, CalendarDays, Power, AlertTriangle } from "lucide-react";
+import { Search, ShieldCheck, XCircle, CheckCircle, Send, MessageSquare, MapPin, Paperclip, Info, Phone, Mail, Clock, User, Loader2, X, ArrowLeft, Crown, CalendarDays, Power, AlertTriangle, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, getDoc, where } from "firebase/firestore";
+import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, getDoc, where, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 const TERM_LENGTHS = ["6 Months", "1 Year", "2 Years", "3 Years", "5 Years"];
@@ -32,11 +32,31 @@ export default function ApplicationsInbox() {
   const [assignTitle, setAssignTitle] = useState("");
   const [assignTerm, setAssignTerm] = useState(TERM_LENGTHS[1]); 
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // CURRENT USER APP DATA
+  const [appUserData, setAppUserData] = useState<any>(null); // For fetching points
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeApp = applications.find(app => app.id === selectedAppId);
+
+  // ─── NOTIFICATION ENGINE ───
+  const sendNotification = async (userId: string, title: string, message: string, type: "success" | "alert" | "info") => {
+    if (!userId) return;
+    try {
+      await addDoc(collection(db, "notifications"), {
+        userId,
+        title,
+        message,
+        type,
+        isRead: false,
+        timestamp: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Notification Dispatch Error:", error);
+    }
+  };
 
   // FETCH DYNAMIC HIERARCHY DATA
   useEffect(() => {
@@ -78,7 +98,6 @@ export default function ApplicationsInbox() {
       tiers.forEach((tier: any) => {
         if (tier.titles) {
           tier.titles.forEach((t: any) => {
-            // Count filled posts based on exact level and region
             const filledCount = leaders.filter((l: any) => {
               const levelMatch = l.roleLevel === assignLevel;
               const titleMatch = l.roleTitle === t.title;
@@ -103,7 +122,6 @@ export default function ApplicationsInbox() {
       });
       setVacancyData(computedVacancies);
       
-      // Auto-select the first available title OR fallback to the requested title if it's valid
       const requestedTitle = activeApp.requestedRole ? activeApp.requestedRole.replace(`${assignLevel} `, "") : "";
       const requestedPostData = computedVacancies.find(v => v.title === requestedTitle);
       
@@ -120,9 +138,17 @@ export default function ApplicationsInbox() {
     }
   }, [hierarchyData, assignLevel, activeApp, leaders]);
 
+  // LIVE FETCH USER DATA FOR POINTS & EMAIL
+  useEffect(() => {
+    if (!activeApp?.userId) return;
+    const unsubscribe = onSnapshot(doc(db, "members", activeApp.userId), (docSnap) => {
+      if (docSnap.exists()) setAppUserData(docSnap.data());
+    });
+    return () => unsubscribe();
+  }, [activeApp?.userId]);
+
   // FETCH LIVE APPLICATIONS & INTAKE SETTINGS
   useEffect(() => {
-    // 1. Applications Listener
     const appsRef = collection(db, "applications");
     const q = query(appsRef, orderBy("appliedAt", "desc"));
     const unsubscribeApps = onSnapshot(q, (snapshot) => {
@@ -134,7 +160,6 @@ export default function ApplicationsInbox() {
       setLoading(false);
     });
 
-    // 2. Settings Listener (Intake Toggle)
     const unsubscribeSettings = onSnapshot(doc(db, "settings", "applications"), (docSnap) => {
       if (docSnap.exists()) {
         setIsIntakeOpen(docSnap.data().isOpen);
@@ -192,6 +217,14 @@ export default function ApplicationsInbox() {
       await updateDoc(doc(db, "applications", activeApp.id), {
         messages: [...(activeApp.messages || []), newMessage]
       });
+      
+      // Auto-alert user of new inbox message
+      await sendNotification(
+        activeApp.userId, 
+        "Application Chat Update", 
+        "The High Command has replied to your pending application. Check your inbox.", 
+        "info"
+      );
     } catch (error) {
       alert("Failed to send message.");
     }
@@ -212,6 +245,14 @@ export default function ApplicationsInbox() {
           status: "rejected",
           messages: [...(activeApp.messages || []), rejectMsg]
         });
+
+        // 🔥 Dispatch Rejection Notification 🔥
+        await sendNotification(
+          activeApp.userId, 
+          "Application Rejected", 
+          "Your application for command hierarchy has been reviewed and rejected. Cooldown period active.", 
+          "alert"
+        );
       } catch (error) {
         console.error("Failed to update status", error);
       }
@@ -240,20 +281,20 @@ export default function ApplicationsInbox() {
     let location = "India";
     if (assignLevel === "District") location = activeApp.district;
     if (assignLevel === "State") location = activeApp.state;
-    const combinedRoleDisplay = assignLevel === "National" ? `National ${assignTitle}` : `${assignLevel} ${assignTitle}`;
+    const combinedRoleDisplay = assignTitle.toLowerCase().includes(assignLevel.toLowerCase()) 
+  ? assignTitle 
+  : assignLevel === "National" ? `National ${assignTitle}` : `${assignLevel} ${assignTitle}`;
 
     try {
-      // 1. Give Member the Role + Term details
       await updateDoc(doc(db, "members", activeApp.userId), {
         role: combinedRoleDisplay,
         roleLevel: assignLevel,
         roleTitle: assignTitle,
         roleLocation: location,
-        appointmentDate: serverTimestamp(), // Replaced appointedAt with appointmentDate for consistency with dashboard
-        termYears: parseInt(assignTerm) // Standardized to number format
+        appointmentDate: serverTimestamp(),
+        termYears: parseInt(assignTerm)
       });
 
-      // 2. Auto Congratulations Message & Status update
       const congratsMsg = {
         id: Date.now(), sender: "admin", 
         text: `🎉 CONGRATULATIONS! The High Command has approved your application.\n\nYou are officially appointed as the ${combinedRoleDisplay} for ${location} for a term of ${assignTerm}. Please check your Local Leaders page to see your official Appointment Details. Your operational responsibilities begin immediately.`,
@@ -265,6 +306,14 @@ export default function ApplicationsInbox() {
         status: "approved",
         messages: [...(activeApp.messages || []), congratsMsg]
       });
+
+      // 🔥 Dispatch Approval Notification 🔥
+      await sendNotification(
+        activeApp.userId, 
+        "Application Approved", 
+        `Congratulations! Your application has been approved. You are now the ${combinedRoleDisplay}. Welcome to the leadership cadre!`, 
+        "success"
+      );
 
       setShowRoleModal(false);
     } catch (error) {
@@ -461,7 +510,7 @@ export default function ApplicationsInbox() {
         )}
       </AnimatePresence>
 
-      {/* FIXED PROFILE MODAL */}
+      {/* FIXED PROFILE MODAL (WITH POINTS INJECTED) */}
       <AnimatePresence>
         {showProfile && activeApp && (
           <>
@@ -473,8 +522,13 @@ export default function ApplicationsInbox() {
               </div>
               <div className="p-4 md:p-6 flex-1 overflow-y-auto space-y-6">
                 <div className="text-center">
-                  <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-tr from-[#007AFF] to-blue-400 text-white rounded-full flex items-center justify-center mx-auto shadow-md mb-3 md:mb-4 text-xl md:text-2xl font-black">
+                  <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-tr from-[#007AFF] to-blue-400 text-white rounded-full flex items-center justify-center mx-auto shadow-md mb-3 md:mb-4 text-xl md:text-2xl font-black relative">
                     {activeApp.name.charAt(0)}
+                    
+                    {/* 🔥 PHASE 4: FLOATING POINTS BADGE 🔥 */}
+                    <div className="absolute -bottom-2 right-[-10px] bg-amber-400 text-amber-950 text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-white shadow-sm flex items-center gap-0.5">
+                      <Star className="w-2.5 h-2.5 fill-amber-950" /> {appUserData?.points || 0}
+                    </div>
                   </div>
                   <h2 className="text-lg md:text-xl font-black text-gray-900">{activeApp.name}</h2>
                   {activeApp.memberId && (
@@ -482,12 +536,11 @@ export default function ApplicationsInbox() {
                   )}
                 </div>
 
-                {/* DETAILED INFO SECTION ADDED */}
                 <div className="space-y-4 pt-4 border-t border-gray-100">
                   <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Contact Details</p>
-                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-[#007AFF]"/> {activeApp.phone || "N/A"}</p>
-                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2 mt-2"><Mail className="w-3.5 h-3.5 text-[#007AFF]"/> {activeApp.email || "No Email Provided"}</p>
+                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-[#007AFF]"/> {appUserData?.phone || activeApp.phone || "N/A"}</p>
+                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2 mt-2"><Mail className="w-3.5 h-3.5 text-[#007AFF]"/> {appUserData?.email || activeApp.email || "No Email Provided"}</p>
                   </div>
                   <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Location Details</p>

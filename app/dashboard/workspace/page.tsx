@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, getDoc } from "firebase/firestore";
+import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, getDoc, writeBatch, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useUser } from "@/hooks/useUser";
 import { Calendar, Users, Mail, Video, MapPin, Loader2, CheckCircle2, ClipboardList, ShieldAlert, Plus, Send, Clock, UserCheck, X, Search, Eye, PlayCircle, Crosshair, MessageSquare, Target, PenTool, RefreshCcw } from "lucide-react";
@@ -148,7 +148,7 @@ export default function LeaderWorkspace() {
     }
   }, [hierarchyData, isNational, isState, isDistrict]);
 
-  // ADVANCED AUDIENCE MATCHER ENGINE (Updated for new role structure)
+  // ADVANCED AUDIENCE MATCHER ENGINE
   const matchAudience = (memberRoleLevel: string, memberRoleTitle: string, oldRole: string, targetValue: string) => {
     const level = (memberRoleLevel || "").toLowerCase();
     const title = (memberRoleTitle || "").toLowerCase();
@@ -157,7 +157,7 @@ export default function LeaderWorkspace() {
 
     const isStateMem = level === "state" || oldR.includes("state");
     const isDistMem = level === "district" || oldR.includes("district");
-    const isBoothMem = oldR.includes("booth"); // fallback if booth isn't in hierarchy
+    const isBoothMem = oldR.includes("booth"); 
     const isActiveMem = oldR === "active_member" || oldR === "member";
 
     if (t === "all state leaders" || t === "all state subordinate leaders") return isStateMem;
@@ -167,7 +167,6 @@ export default function LeaderWorkspace() {
     if (t === "all district & ground cadre") return !isStateMem && !(level === "national" || oldR.includes("national"));
     if (t === "active members only") return isActiveMem;
 
-    // Dynamic Exact Match (e.g. "State President")
     const combinedRole = level && title ? `${level} ${title}` : oldR;
     return combinedRole === t; 
   };
@@ -280,12 +279,14 @@ export default function LeaderWorkspace() {
     }
   };
 
+  // 🔥 PHASE 1: SMART REWARD DISTRIBUTION ENGINE 🔥
   const handleSaveAttendance = async () => {
     if (!selectedMeetingForAttendance) return;
     if (!postMatters.trim()) return showToast("Matters discussed detail is mandatory.", "error");
 
     setIsSavingAttendance(true);
     try {
+      // 1. Secure Meeting Report Data
       const meetingRef = doc(db, "meetings", selectedMeetingForAttendance.id);
       await updateDoc(meetingRef, {
         attendanceRoster: attendanceMap,
@@ -297,13 +298,33 @@ export default function LeaderWorkspace() {
         postFootage: postFootage
       });
 
+      // 2. Execute Points Injection
+      const pointsToAward = selectedMeetingForAttendance.type === "Digital" ? 10 : 20;
+      const batch = writeBatch(db);
+      let hasAttendees = false;
+
+      Object.entries(attendanceMap).forEach(([memberId, isPresent]) => {
+        if (isPresent) {
+          const memberRef = doc(db, "members", memberId);
+          // Auto-increment the points value dynamically
+          batch.update(memberRef, { 
+            points: increment(pointsToAward) 
+          });
+          hasAttendees = true;
+        }
+      });
+
+      if (hasAttendees) {
+        await batch.commit(); // Execute the batch securely
+      }
+
       setSelectedMeetingForAttendance(null);
       setAttendanceMap({});
       setRosterSearch("");
       setPostMatters("");
       setPostMood("Positive & Energetic");
       setPostFootage("");
-      showToast("Meeting intelligence report logged successfully.", "success");
+      showToast(`Intelligence report logged. Awarded ${pointsToAward} points to attendees!`, "success");
     } catch (error) {
       console.error(error);
       showToast("Failed to compile attendance spreadsheet logs.", "error");

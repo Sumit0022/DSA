@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Award, Megaphone, Users, MapPin, ShieldCheck, Crown, Loader2, Globe, AlertTriangle, CheckSquare, Square, X, Clock, CheckCircle2, ChevronRight, CalendarDays, MessageSquare } from "lucide-react";
+import { Award, Megaphone, Users, MapPin, ShieldCheck, Crown, Loader2, Globe, AlertTriangle, CheckSquare, Square, X, Clock, CheckCircle2, ChevronRight, CalendarDays, MessageSquare, Lock, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { collection, getDocs, query, where, addDoc, serverTimestamp, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -15,6 +15,9 @@ export default function LocalLeadersPage() {
   const currentUser = userData ? { id: userData.id, name: userData.name, phone: userData.phone, role: userData.role } : null;
   const userDistrict = userData?.district || "India"; 
   const userState = userData?.state || "India";
+  
+  // 🔥 EXTRACT USER POINTS 🔥
+  const userPoints = userData?.points || 0;
   
   const [leaders, setLeaders] = useState<any[]>([]);
   const [loadingLeaders, setLoadingLeaders] = useState(true);
@@ -57,7 +60,7 @@ export default function LocalLeadersPage() {
     fetchHierarchy();
   }, []);
 
-  // 2. FETCH LEADERS & SETTINGS (Updated to catch Phase 2 assignments)
+  // 2. FETCH LEADERS & SETTINGS
   useEffect(() => {
     if (!userData) return;
     const fetchLiveLeaders = async () => {
@@ -369,12 +372,45 @@ export default function LocalLeadersPage() {
                 );
               }
 
+              // 🔥 NEW LOGIC: MINIMUM 50 POINTS REQUIRED TO APPLY 🔥
+              if (userPoints < 50) {
+                const progress = Math.min((userPoints / 50) * 100, 100);
+                return (
+                  <>
+                    <div className="w-12 h-12 bg-amber-50 text-amber-500 border border-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Lock className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-lg md:text-xl font-black text-gray-900">Application Locked</h3>
+                    <p className="text-xs md:text-sm text-gray-500 mt-2 mb-6 max-w-lg mx-auto leading-relaxed">
+                      Leadership requires proven ground presence. You need a minimum of <strong className="text-gray-900">50 Action Points</strong> to unlock the application process. Attend ground operations and digital meetings to prove your dedication, then return here.
+                    </p>
+
+                    <div className="max-w-xs mx-auto mb-6 text-left">
+                      <div className="flex justify-between items-end mb-1.5">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                          <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> Your Progress
+                        </span>
+                        <span className="text-xs font-black text-amber-600">{userPoints} / 50 Pts</span>
+                      </div>
+                      <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                        <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                      </div>
+                    </div>
+
+                    <button disabled className="px-6 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-xs md:text-sm shadow-sm mx-auto cursor-not-allowed">
+                      Gain more points to apply
+                    </button>
+                  </>
+                );
+              }
+
+              // DEFAULT: User is eligible and intake is open
               return (
                 <>
                   <Award className="w-10 h-10 text-[#007AFF] mx-auto mb-4" />
                   <h3 className="text-lg md:text-xl font-black text-gray-900">Want to join the leadership?</h3>
                   <p className="text-xs md:text-sm text-gray-500 mt-2 mb-6 max-w-lg mx-auto">
-                    The alliance is looking for dedicated citizens. Apply for a post today.
+                    You have sufficient points! The alliance is looking for dedicated citizens. Apply for a post today.
                   </p>
                   <button onClick={() => setShowRules(true)} className="px-6 py-3 bg-gray-900 text-white font-bold rounded-xl text-xs md:text-sm hover:bg-black shadow-md mx-auto">
                     View Eligibility & Apply

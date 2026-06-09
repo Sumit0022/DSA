@@ -16,6 +16,9 @@ export default function CitizenDashboard() {
   
   // 🚀 UPCOMING MEETINGS STATE 🚀
   const [upcomingMeets, setUpcomingMeets] = useState<any[]>([]);
+  
+  // 🔔 UNREAD NOTIFICATIONS ALERT STATE 🔔
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Watchdog Fetcher
   useEffect(() => {
@@ -90,6 +93,23 @@ export default function CitizenDashboard() {
   }, [userData]);
 
 
+  // 🔔 UNREAD NOTIFICATIONS FETCHER 🔔
+  useEffect(() => {
+    if (!userData?.id) return;
+    const notifQuery = query(
+      collection(db, "notifications"), 
+      where("userId", "==", userData.id),
+      where("isRead", "==", false)
+    );
+    
+    const unsubscribe = onSnapshot(notifQuery, (snapshot) => {
+      setUnreadCount(snapshot.docs.length);
+    });
+
+    return () => unsubscribe();
+  }, [userData?.id]);
+
+
   if (loadingUser) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400">
@@ -121,20 +141,32 @@ export default function CitizenDashboard() {
         </div>
         
         <div className="flex items-center gap-3 md:gap-5">
-          <button className="relative p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors hidden sm:block">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-          </button>
-          <div className="hidden md:block w-px h-8 bg-gray-200"></div>
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-gray-900">Verified Member</p>
+          {/* 🔔 LIVE FUNCTIONAL NOTIFICATION BELL (Visible on both Mobile & PC) 🔔 */}
+          <Link href="/dashboard/notifications" className="relative p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
+            <Bell className="w-6 h-6 md:w-5 md:h-5" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 flex items-center justify-center min-w-[14px] h-3.5 bg-red-500 rounded-full border border-white text-white text-[8px] font-black px-1">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </Link>
+          
+          <div className="hidden sm:block w-px h-8 bg-gray-200"></div>
+          
+          {/* 👤 PROFILE BUTTON (Hidden on Mobile, Clickable on PC) 👤 */}
+          <Link href="/dashboard/profile" className="hidden sm:flex items-center gap-2 md:gap-3 group">
+            <div className="text-right">
+              <p className="text-sm font-bold text-gray-900 group-hover:text-[#007AFF] transition-colors">Verified Member</p>
               <p className="text-[10px] font-bold text-[#34C759] uppercase tracking-widest">Active Status</p>
             </div>
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-white rounded-full border border-gray-200 flex items-center justify-center shadow-sm">
-              <UserCircle className="w-5 h-5 md:w-6 md:h-6 text-gray-400" />
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-white rounded-full border border-gray-200 flex items-center justify-center shadow-sm overflow-hidden group-hover:border-[#007AFF] transition-colors">
+              {userData.profilePic || userData.profileImage || userData.photoURL ? (
+                <img src={userData.profilePic || userData.profileImage || userData.photoURL} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <UserCircle className="w-5 h-5 md:w-6 md:h-6 text-gray-400 group-hover:text-[#007AFF] transition-colors" />
+              )}
             </div>
-          </div>
+          </Link>
         </div>
       </div>
 

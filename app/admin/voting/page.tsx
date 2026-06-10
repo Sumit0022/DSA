@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { 
   Vote, Plus, Search, CalendarClock, Globe, Shield, Award, 
   ChevronRight, ArrowLeft, Loader2, FileText, XCircle, 
-  Clock, CheckSquare, UploadCloud, Star, AlertTriangle, Users, CheckCircle2, Download, BarChart3, Edit3, Eye, Trash2, ArrowRight, X
+  Clock, CheckSquare, UploadCloud, Star, AlertTriangle, Users, CheckCircle2, Download, BarChart3, Edit3, Eye, Trash2, ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -18,7 +18,6 @@ export default function AdminVotingDashboard() {
   
   const [activeTab, setActiveTab] = useState("all");
 
-  // Modern Toast & Confirm States
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | null }>({ message: "", type: null });
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; isDanger?: boolean; onConfirm: () => void } | null>(null);
 
@@ -27,17 +26,15 @@ export default function AdminVotingDashboard() {
     setTimeout(() => setToast({ message: "", type: null }), 4000);
   };
 
-  // Wizard & Edit State
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [editingElectionId, setEditingElectionId] = useState<string | null>(null);
 
-  // Modals
   const [showReportModal, setShowReportModal] = useState<any>(null);
-  const [showInspectModal, setShowInspectModal] = useState<any>(null); // New Inspect Modal
+  const [showInspectModal, setShowInspectModal] = useState<any>(null); 
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false); 
 
-  // --- WIZARD FORM DATA ---
   const [pollType, setPollType] = useState<"appointment" | "resolution">("appointment");
   const [pollTitle, setPollTitle] = useState("");
   const [pollDesc, setPollDesc] = useState("");
@@ -47,18 +44,15 @@ export default function AdminVotingDashboard() {
   const [targetPost, setTargetPost] = useState("");
   const [allowedVoters, setAllowedVoters] = useState("all");
 
-  // DYNAMIC HIERARCHY STATES & VACANCY
   const [hierarchyData, setHierarchyData] = useState<any>(null);
   const [leaders, setLeaders] = useState<any[]>([]);
   const [vacancyData, setVacancyData] = useState<{title: string, maxLimit: number, filled: number, isAvailable: boolean}[]>([]);
 
-  // Step 2: Candidates / Options
   const [candidates, setCandidates] = useState<any[]>([]);
   const [searchPhone, setSearchPhone] = useState("");
   const [searchingMember, setSearchingMember] = useState(false);
   const [resolutionOptions, setResolutionOptions] = useState([{ id: 1, text: "Yes, I agree" }, { id: 2, text: "No, I disagree" }]);
   
-  // Step 3: Timings
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [resultTime, setResultTime] = useState("");
@@ -138,7 +132,6 @@ export default function AdminVotingDashboard() {
     }
   }, [hierarchyData, jurisdiction, selectedState, selectedDistrict, leaders, editingElectionId]);
 
-  // --- FORM RESETTER ---
   const resetWizard = () => {
     setEditingElectionId(null);
     setPollType("appointment");
@@ -154,7 +147,6 @@ export default function AdminVotingDashboard() {
     setIsWizardOpen(true);
   };
 
-  // --- FORMAT TIME FOR INPUT ---
   const formatTimeForInput = (isoStr: string) => {
     if (!isoStr) return "";
     const date = new Date(isoStr);
@@ -162,7 +154,6 @@ export default function AdminVotingDashboard() {
     return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
   };
 
-  // --- EDIT ELECTION (PRE-FILL WIZARD) ---
   const handleEditDraft = (election: any) => {
     setEditingElectionId(election.id);
     setPollType(election.type);
@@ -188,7 +179,6 @@ export default function AdminVotingDashboard() {
     setIsWizardOpen(true);
   };
 
-  // --- DELETE ELECTION ---
   const executeDelete = async (id: string) => {
     setIsProcessing(true);
     setConfirmModal(null);
@@ -203,7 +193,6 @@ export default function AdminVotingDashboard() {
     }
   };
 
-  // --- CANDIDATE SEARCH & ADD ---
   const searchAndAddCandidate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (searchPhone.length !== 10) return showToast("Enter valid 10-digit phone number.", "error");
@@ -234,7 +223,6 @@ export default function AdminVotingDashboard() {
     } catch (err) { console.error(err); } finally { setSearchingMember(false); }
   };
 
-  // --- COMPRESSION UPLOAD ---
   const handleImageUpload = (candidateId: string, file: File) => {
     if (!file) return;
     const reader = new FileReader();
@@ -268,7 +256,6 @@ export default function AdminVotingDashboard() {
     setResolutionOptions(prev => prev.filter(opt => opt.id !== id));
   };
 
-  // --- SUBMIT / UPDATE ELECTION ---
   const submitElection = async (status: "draft" | "scheduled") => {
     if (!pollTitle) return showToast("Title is mandatory.", "error");
     if (pollType === "appointment" && candidates.length < 2) return showToast("Minimum 2 candidates required.", "error");
@@ -324,12 +311,10 @@ export default function AdminVotingDashboard() {
         electionId = freshDoc.id;
       }
 
-      // 🔔 🔥 AUTOMATED INSTANT NOTIFICATION CADRE LOOP 🔥 🔔
-      if (status === "scheduled") {
+      if (status === "scheduled" && (!editingElectionId || (editingElectionId && elections.find(e => e.id === editingElectionId)?.status === "draft"))) {
         const membersRef = collection(db, "members");
         let memberConstraints: any[] = [];
 
-        // Build localized filters dynamically
         if (jurisdiction === "State") {
           memberConstraints.push(where("state", "==", selectedState));
         } else if (jurisdiction === "District") {
@@ -338,39 +323,47 @@ export default function AdminVotingDashboard() {
         }
 
         const querySnapshot = await getDocs(query(membersRef, ...memberConstraints));
-        const batch = writeBatch(db);
+        
+        const batchArray = [writeBatch(db)];
+        let operationCounter = 0;
+        let batchIndex = 0;
 
         querySnapshot.forEach((userDoc) => {
           const uData = userDoc.data();
           const isLeader = uData.role && uData.role !== "member" && uData.role !== "active_member";
           
-          // Cross-check voter eligibility role gatekeeper
           let isEligible = false;
           if (allowedVoters === "all") isEligible = true;
           else if (allowedVoters === "active" && (uData.status === "active_member" || isLeader)) isEligible = true;
           else if (allowedVoters === "leaders" && isLeader) isEligible = true;
 
           if (isEligible) {
-  const notifRef = doc(collection(db, "notifications"));
-  batch.set(notifRef, {
-    userId: userDoc.id,
-    title: "Electoral Protocol Live Soon",
-    message: `A mandate has been published: "${pollTitle}" for ${location}. Voting window activates on ${new Date(startTime).toLocaleString()}.`,
-    link: `/dashboard/voting/${electionId}`, // 🚀 Dynamic Link Added
-    type: "info",
-    isRead: false,
-    timestamp: serverTimestamp()
-  });
-}
+            const notifRef = doc(collection(db, "notifications"));
+            batchArray[batchIndex].set(notifRef, {
+              userId: userDoc.id,
+              title: "Electoral Protocol Live Soon",
+              message: `A mandate has been published: "${pollTitle}" for ${location}. Voting window activates on ${new Date(startTime).toLocaleString()}.`,
+              link: `/dashboard/voting/${electionId}`,
+              type: "info",
+              isRead: false,
+              timestamp: serverTimestamp()
+            });
+
+            operationCounter++;
+            if (operationCounter === 490) {
+              batchArray.push(writeBatch(db));
+              batchIndex++;
+              operationCounter = 0;
+            }
+          }
         });
 
-        // Commit all notifications simultaneously
-        await batch.commit();
+        for (const b of batchArray) { await b.commit(); }
       }
 
       setIsWizardOpen(false); 
       resetWizard();
-      showToast(`Election successfully ${editingElectionId ? 'updated' : 'saved'} and cadre notified.`, "success");
+      showToast(`Election successfully ${editingElectionId ? 'updated' : 'saved'}. Cadre alerted.`, "success");
 
     } catch (err: any) { 
       console.error(err); 
@@ -380,7 +373,6 @@ export default function AdminVotingDashboard() {
     }
   };
 
-  // 🚀 DECLARE RESULTS ENGINE 🚀
   const executeDeclareResults = async (election: any) => {
     setIsProcessing(true);
     setConfirmModal(null);
@@ -483,12 +475,525 @@ export default function AdminVotingDashboard() {
         });
       }
 
+      // 🔥 AUTO-NOTIFICATIONS TO ALL VOTERS ON RESULT DECLARATION 🔥
+      const membersRef = collection(db, "members");
+      let memberConstraints: any[] = [];
+      if (election.jurisdictionLevel === "State") {
+        memberConstraints.push(where("state", "==", election.targetState));
+      } else if (election.jurisdictionLevel === "District") {
+        memberConstraints.push(where("state", "==", election.targetState));
+        memberConstraints.push(where("district", "==", election.targetDistrict));
+      }
+
+      const qSnap = await getDocs(query(membersRef, ...memberConstraints));
+      const resBatchArray = [writeBatch(db)];
+      let opCounter = 0;
+      let bIndex = 0;
+
+      qSnap.forEach((userDoc) => {
+        const uData = userDoc.data();
+        const isLeader = uData.role && uData.role !== "member" && uData.role !== "active_member";
+        
+        let isEligible = false;
+        if (election.allowedVoters === "all") isEligible = true;
+        else if (election.allowedVoters === "active" && (uData.status === "active_member" || isLeader)) isEligible = true;
+        else if (election.allowedVoters === "leaders" && isLeader) isEligible = true;
+
+        if (isEligible) {
+          const notifRef = doc(collection(db, "notifications"));
+          resBatchArray[bIndex].set(notifRef, {
+            userId: userDoc.id,
+            title: "Electoral Mandate Declared",
+            message: `The official results for "${election.title}" have been published. Tap to view the complete outcome.`,
+            link: `/dashboard/voting/${election.id}`,
+            type: "success",
+            isRead: false,
+            timestamp: serverTimestamp()
+          });
+
+          opCounter++;
+          if (opCounter === 490) {
+            resBatchArray.push(writeBatch(db));
+            bIndex++;
+            opCounter = 0;
+          }
+        }
+      });
+
+      for (const b of resBatchArray) { await b.commit(); }
+
       showToast("Results declared and mandate executed successfully.", "success");
     } catch (error: any) {
       console.error("Error executing mandate:", error);
       showToast("Failed to declare results: " + error.message, "error");
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // 🔥 DIRECT NATIVE PDF GENERATION ENGINE (BYPASSES HTML2CANVAS CRASHES) 🔥
+  const downloadNativePDF = async () => {
+    setIsDownloadingPDF(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const PW = pdf.internal.pageSize.getWidth();   // 210
+      const PH = pdf.internal.pageSize.getHeight();  // 297
+
+      // ── COLOUR PALETTE ──────────────────────────────────────────────
+      const NAVY   = [15,  23,  42]   as [number,number,number];
+      const BLUE   = [0,  112, 240]   as [number,number,number];
+      const TEAL   = [2,  132, 199]   as [number,number,number];
+      const GOLD   = [202, 138,  4]   as [number,number,number];
+      const GREEN  = [5,  150, 105]   as [number,number,number];
+      const RED    = [220,  38,  38]  as [number,number,number];
+      const LIGHT  = [248, 250, 252]  as [number,number,number];
+      const BORDER = [226, 232, 240]  as [number,number,number];
+      const MUTED  = [100, 116, 139]  as [number,number,number];
+      const TEXT   = [15,  23,  42]   as [number,number,number];
+      const WHITE  = [255, 255, 255]  as [number,number,number];
+
+      // ── HELPERS ─────────────────────────────────────────────────────
+      const setFill   = (c: [number,number,number]) => pdf.setFillColor(...c);
+      const setDraw   = (c: [number,number,number]) => pdf.setDrawColor(...c);
+      const setTxt    = (c: [number,number,number]) => pdf.setTextColor(...c);
+      const rect      = (x:number,y:number,w:number,h:number,s:"F"|"S"|"FD"="F") => pdf.rect(x,y,w,h,s);
+      const roundRect = (x:number,y:number,w:number,h:number,r:number,s:"F"|"S"|"FD"="F") => pdf.roundedRect(x,y,w,h,r,r,s);
+      const line      = (x1:number,y1:number,x2:number,y2:number) => pdf.line(x1,y1,x2,y2);
+      const txt       = (t:string,x:number,y:number,opts?:any) => pdf.text(t,x,y,opts||{});
+
+      // ── LOAD LOGO ────────────────────────────────────────────────────
+      let logoBase64: string | null = null;
+      try {
+        const response = await fetch("/dsa-logo.png");
+        const blob     = await response.blob();
+        logoBase64      = await new Promise<string>((res) => {
+          const reader  = new FileReader();
+          reader.onload = () => res((reader.result as string).split(",")[1]);
+          reader.readAsDataURL(blob);
+        });
+      } catch (_) { logoBase64 = null; }
+
+      // ════════════════════════════════════════════════════════════════
+      // PAGE 1 — COVER / HEADER
+      // ════════════════════════════════════════════════════════════════
+
+      // Full-width dark hero band
+      setFill(NAVY);
+      rect(0, 0, PW, 68);
+
+      // Subtle diagonal accent stripe inside hero
+      setFill([30, 58, 138]);
+      pdf.triangle(PW - 60, 0, PW, 0, PW, 68, "F");
+
+      // Left accent bar (brand blue)
+      setFill(BLUE);
+      rect(0, 0, 5, 68);
+
+      // Logo (top-left of hero)
+      if (logoBase64) {
+        try {
+          pdf.addImage(logoBase64, "PNG", 12, 10, 20, 20);
+        } catch (_) {}
+      }
+
+      // Organisation name
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "bold");
+      setTxt(WHITE);
+      txt("DEMOCRATIC SOCIAL ALLIANCE", 38, 18);
+      pdf.setFontSize(6.5);
+      pdf.setFont("helvetica", "normal");
+      setTxt([148, 163, 184]);
+      txt("Official Electoral Commission", 38, 24);
+
+      // Gold divider line
+      setDraw(GOLD);
+      pdf.setLineWidth(0.4);
+      line(38, 27, PW - 20, 27);
+
+      // Main headline
+      pdf.setFontSize(18);
+      pdf.setFont("helvetica", "bold");
+      setTxt(WHITE);
+      const splitH = pdf.splitTextToSize("OFFICIAL ELECTION REPORT", PW - 55);
+      txt(splitH, 38, 37);
+
+      // Sub-tagline
+      pdf.setFontSize(7);
+      pdf.setFont("helvetica", "normal");
+      setTxt([148, 163, 184]);
+      txt("DSA Democratic Poll Engine  -  Command Centre Document", 38, 54);
+
+      // ── FIX 1: "RESULTS DECLARED" badge — properly centered ──────────
+      // Badge is 42mm wide, vertically centered in hero (68mm tall = center at 34mm)
+      const badgeW = 42;
+      const badgeH = 10;
+      const badgeX = PW - badgeW - 10; // 10mm from right edge
+      const badgeY = (68 - badgeH) / 2; // vertically centered in hero = 29mm
+      setFill(GREEN);
+      roundRect(badgeX, badgeY, badgeW, badgeH, 2);
+      pdf.setFontSize(6.5);
+      pdf.setFont("helvetica", "bold");
+      setTxt(WHITE);
+      // Use align:"center" with x = badgeX + badgeW/2, y = badgeY + badgeH/2 + ~2 for text baseline
+      txt("RESULTS DECLARED", badgeX + badgeW / 2, badgeY + badgeH / 2 + 1.5, { align: "center" });
+
+      // ── METADATA STRIP ──────────────────────────────────────────────
+      let yy = 80;
+
+      setFill(LIGHT);
+      setDraw(BORDER);
+      pdf.setLineWidth(0.3);
+      roundRect(14, yy, PW - 28, 38, 3, "FD");
+
+      const metas = [
+        { label: "PROTOCOL TITLE",   value: showReportModal.title },
+        { label: "JURISDICTION",     value: `${showReportModal.locationDisplay}` },
+        { label: "ELECTION TYPE",    value: showReportModal.type.toUpperCase() },
+        { label: "MANDATE TARGET",   value: showReportModal.targetPost || "Public Resolution" },
+      ];
+      const colW = (PW - 28) / 4;
+      metas.forEach((m, i) => {
+        const cx = 18 + i * colW;
+        pdf.setFontSize(6);
+        pdf.setFont("helvetica", "bold");
+        setTxt(MUTED);
+        txt(m.label, cx, yy + 9);
+        pdf.setFontSize(8.5);
+        pdf.setFont("helvetica", "bold");
+        setTxt(TEXT);
+        const wrapped = pdf.splitTextToSize(m.value, colW - 6);
+        txt(wrapped[0] || m.value, cx, yy + 18);
+        if (wrapped[1]) {
+          pdf.setFontSize(7.5);
+          txt(wrapped[1], cx, yy + 24);
+        }
+        if (i < 3) {
+          setDraw(BORDER);
+          pdf.setLineWidth(0.2);
+          line(14 + (i + 1) * colW, yy + 4, 14 + (i + 1) * colW, yy + 34);
+        }
+      });
+
+      // ── STAT CARDS ROW ───────────────────────────────────────────────
+      yy += 50;
+      const stats = [
+        { label: "TOTAL VOTES CAST",     value: String(showReportModal.totalVotes || 0), color: BLUE },
+        { label: "PEAK VOTING HOUR",     value: showReportModal.peakHour || "N/A",        color: TEAL },
+        { label: "CANDIDATES / OPTIONS", value: showReportModal.type === "appointment"
+            ? String(showReportModal.candidates?.length || 0)
+            : String(showReportModal.options?.length || 0),                               color: GOLD },
+      ];
+      const cardW = (PW - 28 - 8) / 3;
+      stats.forEach((s, i) => {
+        const cx = 14 + i * (cardW + 4);
+        setFill([203, 213, 225]);
+        roundRect(cx + 1, yy + 1, cardW, 28, 3);
+        setFill(WHITE);
+        setDraw(BORDER);
+        pdf.setLineWidth(0.3);
+        roundRect(cx, yy, cardW, 28, 3, "FD");
+        setFill(s.color);
+        roundRect(cx, yy, cardW, 5, 3);
+        rect(cx, yy + 2.5, cardW, 2.5);
+        pdf.setFontSize(17);
+        pdf.setFont("helvetica", "bold");
+        setTxt(s.color);
+        txt(s.value, cx + cardW / 2, yy + 19, { align: "center" });
+        pdf.setFontSize(5.5);
+        pdf.setFont("helvetica", "bold");
+        setTxt(MUTED);
+        txt(s.label, cx + cardW / 2, yy + 25, { align: "center" });
+      });
+
+      // ── SECTION TITLE: VOTE DISTRIBUTION ────────────────────────────
+      yy += 40;
+      setFill(NAVY);
+      roundRect(14, yy, PW - 28, 10, 2);
+      pdf.setFontSize(7.5);
+      pdf.setFont("helvetica", "bold");
+      setTxt(WHITE);
+      txt("  MANDATE DISTRIBUTION - VOTE BREAKDOWN", 20, yy + 7);
+
+      yy += 14;
+
+      const candidatesList: any[] =
+        showReportModal.type === "appointment"
+          ? showReportModal.candidates || []
+          : (showReportModal.options || []).map((o: string) => ({ memberId: o, name: o }));
+
+      const totalVotes = showReportModal.totalVotes || 0;
+
+      // ── FIX 2: Winner candidate row — proper layout, centered badge ──
+      // Row height increased to 22mm to give room for name + winner badge below
+      const ROW_H = 22;
+
+      candidatesList.forEach((cand: any, idx: number) => {
+        const votes = showReportModal.voteDistribution?.[cand.memberId] ||
+                      showReportModal.voteDistribution?.[cand.name] || 0;
+        const pct   = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+        const isWin = showReportModal.winnerId === cand.memberId;
+        const barColor: [number,number,number] = isWin ? GREEN : [156, 163, 175];
+
+        // Row background
+        setFill(isWin ? [240, 253, 244] : LIGHT);
+        setDraw(isWin ? [167, 243, 208] : BORDER);
+        pdf.setLineWidth(0.25);
+        roundRect(14, yy, PW - 28, ROW_H, 2, "FD");
+
+        // Winner left accent bar
+        if (isWin) {
+          setFill(GREEN);
+          roundRect(14, yy, 4, ROW_H, 1);
+          rect(16, yy, 2, ROW_H); // flatten right side of left bar
+        }
+
+        // ── FIX 5: Circular candidate photo — use canvas-based clipping ─
+        // Draw circular clip manually: draw filled circle background, then addImage
+        // constrained to a square, then draw white stroke circle on top
+        const photoSize = 10; // diameter in mm
+        const photoX = 21;    // left edge of image
+        const photoY = yy + (ROW_H - photoSize) / 2; // vertically centered in row
+
+        // Gray circle background (fallback)
+        setFill([209, 213, 219]);
+        pdf.circle(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, "F");
+
+        if (cand.photo && cand.photo.startsWith("data:image")) {
+          try {
+            // Add image as a SQUARE (same width & height = photoSize) so it's not distorted
+            pdf.addImage(cand.photo, "JPEG", photoX, photoY, photoSize, photoSize);
+            // White circle stroke on top to give circular illusion + hide corners
+            // Draw white filled corners to clip (4 corner triangles approach)
+            // Actually draw white circle outline which visually masks square corners
+            setDraw(WHITE);
+            pdf.setLineWidth(1.2);
+            pdf.circle(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, "S");
+            // Re-draw the row background color over corners to truly clip
+            const cornerColor: [number,number,number] = isWin ? [240, 253, 244] : [248, 250, 252];
+            setFill(cornerColor);
+            setDraw(cornerColor);
+            pdf.setLineWidth(0);
+            // Draw 4 tiny corner-covering circles (trick to round image corners)
+            // Top-left corner
+            pdf.triangle(photoX, photoY, photoX + 3, photoY, photoX, photoY + 3, "F");
+            // Top-right corner
+            pdf.triangle(photoX + photoSize, photoY, photoX + photoSize - 3, photoY, photoX + photoSize, photoY + 3, "F");
+            // Bottom-left corner
+            pdf.triangle(photoX, photoY + photoSize, photoX + 3, photoY + photoSize, photoX, photoY + photoSize - 3, "F");
+            // Bottom-right corner
+            pdf.triangle(photoX + photoSize, photoY + photoSize, photoX + photoSize - 3, photoY + photoSize, photoX + photoSize, photoY + photoSize - 3, "F");
+
+            // Final clean white stroke circle over everything
+            setDraw(WHITE);
+            pdf.setLineWidth(0.8);
+            pdf.circle(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, "S");
+          } catch (_) {}
+        }
+
+        // Rank number (above photo, top-left of row)
+        pdf.setFontSize(5.5);
+        pdf.setFont("helvetica", "bold");
+        setTxt(MUTED);
+        txt(`#${idx + 1}`, 20, yy + 5);
+
+        // Name — positioned to the right of photo, vertically in upper half
+        const nameX = photoX + photoSize + 4; // 4mm gap after photo
+        pdf.setFontSize(8.5);
+        pdf.setFont("helvetica", "bold");
+        setTxt(isWin ? (GREEN as any) : TEXT);
+        const nameY = isWin ? yy + 8 : yy + ROW_H / 2 + 1; // if winner, push up to make room for badge
+        txt(pdf.splitTextToSize(cand.name, 58)[0], nameX, nameY);
+
+        // ── Winner badge — centered below the name ───────────────────
+        if (isWin) {
+          const winBadgeW = 20;
+          const winBadgeH = 5;
+          const winBadgeX = nameX; // align left with name
+          const winBadgeY = yy + 12;
+          setFill(GREEN);
+          roundRect(winBadgeX, winBadgeY, winBadgeW, winBadgeH, 1.2);
+          pdf.setFontSize(5.5);
+          pdf.setFont("helvetica", "bold");
+          setTxt(WHITE);
+          // Center text inside badge
+          txt("WINNER  v", winBadgeX + winBadgeW / 2, winBadgeY + winBadgeH / 2 + 1, { align: "center" });
+        }
+
+        // Percentage (right side, vertically centered)
+        pdf.setFontSize(11);
+        pdf.setFont("helvetica", "bold");
+        setTxt(TEXT);
+        txt(`${pct.toFixed(1)}%`, PW - 16, yy + ROW_H / 2 - 1, { align: "right" });
+        pdf.setFontSize(6.5);
+        pdf.setFont("helvetica", "normal");
+        setTxt(MUTED);
+        txt(`${votes} votes`, PW - 16, yy + ROW_H / 2 + 4, { align: "right" });
+
+        // Bar track — positioned in lower portion of row
+        const barX = nameX;
+        const barW = PW - nameX - 36;
+        const barY = yy + ROW_H - 5;
+        setFill([229, 231, 235]);
+        roundRect(barX, barY, barW, 2.5, 1);
+        if (pct > 0) {
+          setFill(barColor);
+          roundRect(barX, barY, (barW * pct) / 100, 2.5, 1);
+        }
+
+        yy += ROW_H + 4; // 4mm gap between rows
+
+        // Page break guard
+        if (yy > PH - 60) {
+          pdf.addPage();
+          yy = 20;
+        }
+      });
+
+      // ── FIX 3: Reassignment Log — always start on a new page ────────
+      if (showReportModal.type === "appointment" && showReportModal.reportMetrics) {
+
+        // Force new page for reassignment log so it has clean space
+        pdf.addPage();
+        yy = 20;
+
+        // Section header
+        setFill(GOLD);
+        roundRect(14, yy, PW - 28, 10, 2);
+        pdf.setFontSize(7.5);
+        pdf.setFont("helvetica", "bold");
+        setTxt(WHITE);
+        txt("  OFFICIAL REASSIGNMENT LOG - PRE & POST APPOINTMENT", 20, yy + 7);
+
+        yy += 16;
+
+        const halfW = (PW - 28 - 8) / 2;
+
+        // Pre-election card
+        setFill([254, 249, 195]);
+        setDraw([253, 224, 71]);
+        pdf.setLineWidth(0.4);
+        roundRect(14, yy, halfW, 40, 3, "FD");
+        pdf.setFontSize(6);
+        pdf.setFont("helvetica", "bold");
+        setTxt(GOLD);
+        txt("PRE-ELECTION STATUS", 14 + halfW / 2, yy + 9, { align: "center" });
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "bold");
+        setTxt(TEXT);
+        const prePost = pdf.splitTextToSize(showReportModal.reportMetrics.preElectionPost, halfW - 10);
+        txt(prePost[0], 14 + halfW / 2, yy + 20, { align: "center" });
+        if (prePost[1]) {
+          pdf.setFontSize(8);
+          txt(prePost[1], 14 + halfW / 2, yy + 27, { align: "center" });
+        }
+        pdf.setFontSize(7);
+        pdf.setFont("helvetica", "normal");
+        setTxt(MUTED);
+        txt(showReportModal.reportMetrics.preElectionLoc || "-", 14 + halfW / 2, yy + 30, { align: "center" });
+        if (showReportModal.reportMetrics.isPostVacated) {
+          setFill(RED);
+          roundRect(14 + halfW / 2 - 14, yy + 33, 28, 5, 1.5);
+          pdf.setFontSize(5.5);
+          pdf.setFont("helvetica", "bold");
+          setTxt(WHITE);
+          txt("NOW VACANT", 14 + halfW / 2, yy + 36.5, { align: "center" });
+        }
+
+        // ── FIX 4: Arrow — use ASCII text-based arrow drawn with lines ──
+        // jsPDF does not reliably render Unicode arrows (→ renders as '!')
+        // Draw a proper arrow using line + polygon instead
+        const arrowCenterX = 14 + halfW + 4; // center between the two cards
+        const arrowCenterY = yy + 20;
+        setDraw(BLUE);
+        setFill(BLUE);
+        pdf.setLineWidth(0.8);
+        // Horizontal shaft of arrow
+        line(arrowCenterX - 2.5, arrowCenterY, arrowCenterX + 1, arrowCenterY);
+        // Arrowhead (triangle pointing right)
+        pdf.triangle(
+          arrowCenterX + 1,     arrowCenterY - 2,   // top of head
+          arrowCenterX + 1,     arrowCenterY + 2,   // bottom of head
+          arrowCenterX + 4.5,   arrowCenterY,       // tip
+          "F"
+        );
+
+        // Post-election card
+        const cx2 = 14 + halfW + 8;
+        setFill([240, 253, 244]);
+        setDraw([167, 243, 208]);
+        pdf.setLineWidth(0.4);
+        roundRect(cx2, yy, halfW, 40, 3, "FD");
+        pdf.setFontSize(6);
+        pdf.setFont("helvetica", "bold");
+        setTxt(GREEN);
+        txt("POST-ELECTION COMMAND", cx2 + halfW / 2, yy + 9, { align: "center" });
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "bold");
+        setTxt(GREEN as any);
+        const postPost = pdf.splitTextToSize(showReportModal.reportMetrics.postElectionPost, halfW - 10);
+        txt(postPost[0], cx2 + halfW / 2, yy + 20, { align: "center" });
+        if (postPost[1]) {
+          pdf.setFontSize(8);
+          txt(postPost[1], cx2 + halfW / 2, yy + 27, { align: "center" });
+        }
+        pdf.setFontSize(7);
+        pdf.setFont("helvetica", "normal");
+        setTxt([4, 120, 87]);
+        txt(showReportModal.reportMetrics.postElectionLoc || "-", cx2 + halfW / 2, yy + 30, { align: "center" });
+        setFill(GREEN);
+        roundRect(cx2 + halfW / 2 - 18, yy + 33, 36, 5, 1.5);
+        pdf.setFontSize(5.5);
+        pdf.setFont("helvetica", "bold");
+        setTxt(WHITE);
+        txt("NEWLY APPOINTED", cx2 + halfW / 2, yy + 36.5, { align: "center" });
+
+        yy += 54;
+      }
+
+      // ════════════════════════════════════════════════════════════════
+      // FOOTER (all pages)
+      // ════════════════════════════════════════════════════════════════
+      const totalPages = (pdf.internal as any).pages.length - 1;
+      for (let p = 1; p <= totalPages; p++) {
+        pdf.setPage(p);
+
+        // Footer bar
+        setFill(NAVY);
+        rect(0, PH - 14, PW, 14);
+        setFill(BLUE);
+        rect(0, PH - 14, 5, 14);
+
+        if (logoBase64) {
+          try { pdf.addImage(logoBase64, "PNG", 10, PH - 12, 8, 8); } catch (_) {}
+        }
+
+        pdf.setFontSize(6);
+        pdf.setFont("helvetica", "bold");
+        setTxt([148, 163, 184]);
+        txt("Democratic Social Alliance  -  Official Electoral Report", 22, PH - 7);
+
+        pdf.setFontSize(5.5);
+        setTxt([100, 116, 139]);
+        txt(`Generated: ${new Date().toLocaleString()}`, 22, PH - 3);
+
+        setTxt(WHITE);
+        pdf.setFontSize(7);
+        pdf.setFont("helvetica", "bold");
+        txt(`Page ${p} of ${totalPages}`, PW - 14, PH - 6, { align: "right" });
+      }
+
+      // ── SAVE ──────────────────────────────────────────────────────────
+      const safeName = showReportModal.title.replace(/[^a-z0-9]/gi, "_");
+      pdf.save(`DSA_Election_Report_${safeName}.pdf`);
+      showToast("Professional PDF report downloaded successfully.", "success");
+
+    } catch (err) {
+      console.error("PDF Native Gen Error:", err);
+      showToast("Failed to generate PDF document.", "error");
+    } finally {
+      setIsDownloadingPDF(false);
     }
   };
 
@@ -540,7 +1045,7 @@ export default function AdminVotingDashboard() {
       </AnimatePresence>
 
       {/* ─── HEADER ─── */}
-      <div className="bg-gray-900 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden text-white print:hidden">
+      <div className="bg-gray-900 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden text-white">
         <div className="absolute top-[-20%] right-[-10%] w-96 h-96 bg-blue-500/20 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="max-w-2xl">
@@ -562,7 +1067,7 @@ export default function AdminVotingDashboard() {
       </div>
 
       {/* ─── MAIN DASHBOARD ─── */}
-      <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm min-h-[500px] flex flex-col print:hidden">
+      <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm min-h-[500px] flex flex-col">
         
         {/* TABS */}
         <div className="flex gap-2 overflow-x-auto pb-4 border-b border-gray-100 shrink-0">
@@ -626,7 +1131,7 @@ export default function AdminVotingDashboard() {
                       
                       {/* ACTION BUTTONS */}
                       <div className="flex justify-between items-center w-full gap-2 mt-2">
-                        {/* LEFT ACTIONS (Edit/View/Declare) */}
+                        {/* LEFT ACTIONS */}
                         <div className="flex-1">
                           {election.status === "draft" ? (
                             <button 
@@ -664,7 +1169,7 @@ export default function AdminVotingDashboard() {
                           )}
                         </div>
 
-                        {/* RIGHT ACTION (Delete - Always Available) */}
+                        {/* RIGHT ACTION */}
                         <button 
                           onClick={() => setConfirmModal({
                             title: "Delete Protocol?",
@@ -686,7 +1191,7 @@ export default function AdminVotingDashboard() {
         </div>
       </div>
 
-      {/* ─── INSPECT MODAL (READ-ONLY FOR SCHEDULED/ACTIVE) ─── */}
+      {/* ─── INSPECT MODAL ─── */}
       <AnimatePresence>
         {showInspectModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -738,7 +1243,7 @@ export default function AdminVotingDashboard() {
                           <div>
                             <h5 className="font-bold text-gray-900">{cand.name}</h5>
                             <p className="text-[10px] text-gray-500 font-mono mb-1">{cand.memberId}</p>
-                            <p className="text-xs text-gray-600">{cand.vision || "No manifesto provided."}</p>
+                            <p className="text-xs text-gray-600 whitespace-pre-wrap">{cand.vision || "No manifesto provided."}</p>
                           </div>
                         </div>
                       ))}
@@ -759,17 +1264,22 @@ export default function AdminVotingDashboard() {
         )}
       </AnimatePresence>
 
-      {/* ─── ELECTION REPORT MODAL (PDF TARGET) ─── */}
+      {/* ─── REPORT MODAL WITH NATIVE PDF ENGINE ─── */}
       <AnimatePresence>
         {showReportModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 print:p-0 print:bg-white print:block print:inset-auto print:relative print:z-0">
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden print:shadow-none print:max-h-none print:rounded-none">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
               
-              <div className="bg-gray-50 border-b border-gray-200 p-6 flex justify-between items-center shrink-0 print:hidden">
+              <div className="bg-gray-50 border-b border-gray-200 p-6 flex justify-between items-center shrink-0">
                 <h2 className="text-xl font-black text-gray-900 flex items-center gap-2"><FileText className="w-6 h-6 text-[#007AFF]" /> Official Mandate Report</h2>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => window.print()} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-black transition-colors flex items-center gap-1 shadow-sm">
-                    <Download className="w-4 h-4" /> Save PDF
+                  <button 
+                    onClick={downloadNativePDF} 
+                    disabled={isDownloadingPDF}
+                    className="px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-black transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+                  >
+                    {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} 
+                    {isDownloadingPDF ? "Generating PDF..." : "Direct Download PDF"}
                   </button>
                   <button onClick={() => setShowReportModal(null)} className="p-2 bg-white hover:bg-gray-100 border border-gray-200 rounded-full transition-colors">
                     <XCircle className="w-5 h-5 text-gray-400" />
@@ -777,18 +1287,15 @@ export default function AdminVotingDashboard() {
                 </div>
               </div>
 
-              {/* PDF PRINTABLE CONTENT */}
-              <div className="flex-1 overflow-y-auto p-8 md:p-12 print:p-0 bg-white">
-                <div className="border-[10px] border-double border-gray-100 p-8 rounded-xl print:border-none print:p-0">
+              {/* PDF PREVIEW CONTENT (FOR UI ONLY) */}
+              <div className="flex-1 overflow-y-auto bg-gray-100/50">
+                <div className="p-8 md:p-12 bg-white w-full max-w-3xl mx-auto shadow-sm">
                   
-                  {/* HEADER */}
                   <div className="text-center mb-8 border-b-2 border-gray-900 pb-6">
-                    <img src="/dsa-logo.png" alt="DSA Logo" className="w-20 h-20 mx-auto mb-4 object-contain" onError={(e) => e.currentTarget.style.display='none'} />
                     <h1 className="text-3xl font-black text-gray-900 tracking-tighter uppercase font-serif">Official Election Report</h1>
                     <p className="text-gray-500 font-bold uppercase tracking-widest text-xs mt-2">Democratic Social Alliance Command Center</p>
                   </div>
 
-                  {/* SECTION 1: METADATA */}
                   <div className="grid grid-cols-2 gap-6 mb-8">
                     <div>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Protocol Title</p>
@@ -808,8 +1315,7 @@ export default function AdminVotingDashboard() {
                     </div>
                   </div>
 
-                  {/* SECTION 2: STATISTICS */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-8 flex justify-between items-center print:bg-white print:border-y-2 print:border-x-0 print:rounded-none">
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-8 flex justify-between items-center">
                     <div className="text-center flex-1">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Total Votes Cast</p>
                       <p className="text-3xl font-black text-gray-900 font-mono">{showReportModal.totalVotes || 0}</p>
@@ -821,7 +1327,6 @@ export default function AdminVotingDashboard() {
                     </div>
                   </div>
 
-                  {/* SECTION 3: VOTE DISTRIBUTION */}
                   <div className="mb-10">
                     <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest border-b border-gray-200 pb-2 mb-4">Mandate Distribution</h3>
                     <div className="space-y-4">
@@ -845,9 +1350,8 @@ export default function AdminVotingDashboard() {
                     </div>
                   </div>
 
-                  {/* SECTION 4: DETAILED PRE/POST METRICS (IF APPOINTMENT) */}
                   {showReportModal.type === 'appointment' && showReportModal.reportMetrics && (
-                    <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6 print:bg-white print:border-gray-300">
+                    <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
                       <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest mb-4 flex items-center gap-2"><Award className="w-4 h-4"/> Official Reassignment Log</h3>
                       
                       <div className="flex flex-col md:flex-row gap-6 items-center">
@@ -860,7 +1364,7 @@ export default function AdminVotingDashboard() {
                           )}
                         </div>
                         
-                        <ArrowRight className="w-6 h-6 text-gray-300 hidden md:block print:hidden" />
+                        <ArrowRight className="w-6 h-6 text-gray-300 hidden md:block" />
                         
                         <div className="flex-1 bg-emerald-50 border border-emerald-200 p-4 rounded-xl shadow-sm w-full text-center">
                           <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest mb-1">Post-Election Command</p>
@@ -887,10 +1391,9 @@ export default function AdminVotingDashboard() {
       {/* ─── ELECTION CREATION/EDIT WIZARD MODAL ─── */}
       <AnimatePresence>
         {isWizardOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] bg-gray-900/80 backdrop-blur-md flex items-center justify-center p-4 print:hidden">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] bg-gray-900/80 backdrop-blur-md flex items-center justify-center p-4">
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-[2rem] w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
               
-              {/* WIZARD HEADER */}
               <div className="bg-gray-50 border-b border-gray-200 p-6 flex justify-between items-center shrink-0 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-5"><Vote className="w-24 h-24" /></div>
                 <div className="relative z-10 flex items-center gap-4">
@@ -903,19 +1406,16 @@ export default function AdminVotingDashboard() {
                   </div>
                 </div>
                 <button onClick={() => setIsWizardOpen(false)} className="p-2 bg-white hover:bg-gray-100 border border-gray-200 rounded-full transition-colors relative z-10">
-                  <X className="w-5 h-5 text-gray-400" />
+                  <XCircle className="w-5 h-5 text-gray-400" />
                 </button>
               </div>
 
-              {/* WIZARD PROGRESS BAR */}
               <div className="w-full bg-gray-100 h-1.5 shrink-0">
                 <div className="bg-[#007AFF] h-full transition-all duration-300" style={{ width: `${(wizardStep / 3) * 100}%` }}></div>
               </div>
 
-              {/* WIZARD CONTENT AREA */}
               <div className="flex-1 overflow-y-auto p-6 md:p-8">
                 
-                {/* STEP 1: CONFIGURATION */}
                 {wizardStep === 1 && (
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6 max-w-2xl mx-auto">
                     <div className="grid grid-cols-2 gap-4">
@@ -1023,7 +1523,6 @@ export default function AdminVotingDashboard() {
                   </motion.div>
                 )}
 
-                {/* STEP 2: CANDIDATES / OPTIONS BUILDER */}
                 {wizardStep === 2 && (
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
                     
@@ -1128,7 +1627,6 @@ export default function AdminVotingDashboard() {
                   </motion.div>
                 )}
 
-                {/* STEP 3: SCHEDULING & PUBLISH */}
                 {wizardStep === 3 && (
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6 max-w-2xl mx-auto">
                     
@@ -1157,14 +1655,13 @@ export default function AdminVotingDashboard() {
 
               </div>
 
-              {/* WIZARD FOOTER (CONTROLS) */}
               <div className="bg-gray-50 border-t border-gray-200 p-6 flex justify-between items-center shrink-0">
                 <button 
                   onClick={() => wizardStep > 1 ? setWizardStep(wizardStep - 1) : setIsWizardOpen(false)}
                   disabled={isProcessing}
                   className="px-6 py-3 text-gray-600 font-bold text-sm bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-100 flex items-center gap-2"
                 >
-                  <ArrowLeft className="w-4 h-4" /> {wizardStep === 1 ? 'Cancel' : 'Cancel Edit'}
+                  <ArrowLeft className="w-4 h-4" /> {wizardStep === 1 ? 'Cancel' : 'Back'}
                 </button>
 
                 <div className="flex items-center gap-3">

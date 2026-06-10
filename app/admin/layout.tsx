@@ -10,12 +10,14 @@ import { IndianRupee } from "lucide-react";
 import { Activity } from "lucide-react";
 import { Brain } from "lucide-react";
 import { Signature } from "lucide-react";
+import { CheckSquare } from "lucide-react";
 
 const sidebarLinks = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { name: "Citizens Ledger", href: "/admin/members", icon: Users },
   { name: "Activity Radar", href: "/admin/activity", icon: Activity },
   { name: "Analytics", href: "/admin/analytics", icon: Brain },
+  { name: "Voting", href: "/admin/voting", icon: CheckSquare },
   { name: "Newsletter", href: "/admin/newsletter", icon: Mail },
   { name: "Petitions", href: "/admin/petitions", icon: Signature },
   { name: "Publishing Hub", href: "/admin/blog", icon: FileText },

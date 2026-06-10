@@ -11,11 +11,13 @@ import { useUser } from "@/hooks/useUser";
 import { HeartHandshake} from "lucide-react";
 import { Calendar} from "lucide-react";
 import { ClipboardList } from "lucide-react";
+import { CheckSquare } from "lucide-react";
 
 const citizenLinks = [
   { name: "My HQ", href: "/dashboard", icon: LayoutDashboard },
   { name: "Freedom Pass", href: "/dashboard/pass", icon: Shield },
   { name: "Meetings", href: "/dashboard/meetings", icon: Calendar },
+  { name: "Voting", href: "/dashboard/voting", icon: CheckSquare },
   { name: "Watchdog Feed", href: "/dashboard/watchdog", icon: Eye },
   { name: "Local Leaders", href: "/dashboard/leaders", icon: Users },
   { name: "Donate", href: "/dashboard/donate", icon: HeartHandshake },

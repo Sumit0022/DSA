@@ -535,8 +535,11 @@ export default function AdminVotingDashboard() {
   const downloadNativePDF = async () => {
     setIsDownloadingPDF(true);
     try {
-      const { jsPDF } = await import("jspdf");
+      // FIX: Changed import to avoid Vercel TS Type Error
+      const jspdfModule = await import("jspdf");
+      const jsPDF = jspdfModule.default || jspdfModule.jsPDF;
       const pdf = new jsPDF("p", "mm", "a4");
+      
       const PW = pdf.internal.pageSize.getWidth();   // 210
       const PH = pdf.internal.pageSize.getHeight();  // 297
 
@@ -566,7 +569,7 @@ export default function AdminVotingDashboard() {
       let logoBase64: string | null = null;
       try {
         const response = await fetch("/dsa-logo.png");
-        const blob     = await response.blob();
+        const blob      = await response.blob();
         logoBase64      = await new Promise<string>((res) => {
           const reader  = new FileReader();
           reader.onload = () => res((reader.result as string).split(",")[1]);

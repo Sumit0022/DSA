@@ -12,6 +12,7 @@ import { Brain } from "lucide-react";
 import { Signature } from "lucide-react";
 import { CheckSquare } from "lucide-react";
 import { Newspaper } from "lucide-react";
+import { Images } from "lucide-react";
 
 const sidebarLinks = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -21,6 +22,7 @@ const sidebarLinks = [
   { name: "Voting", href: "/admin/voting", icon: CheckSquare },
   { name: "Press Release", href: "/admin/press", icon: Newspaper },
   { name: "Newsletter", href: "/admin/newsletter", icon: Mail },
+  { name: "Gallery", href: "/admin/gallery", icon: Images },
   { name: "Petitions", href: "/admin/petitions", icon: Signature },
   { name: "Publishing Hub", href: "/admin/blog", icon: FileText },
   { name: "Donations", href: "/admin/donations", icon: IndianRupee},

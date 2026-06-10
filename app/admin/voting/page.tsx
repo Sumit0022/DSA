@@ -535,9 +535,9 @@ export default function AdminVotingDashboard() {
   const downloadNativePDF = async () => {
     setIsDownloadingPDF(true);
     try {
-      // FIX: Changed import to avoid Vercel TS Type Error
-      const jspdfModule = await import("jspdf");
-      const jsPDF = jspdfModule.default || jspdfModule.jsPDF;
+      // 🔥 FIX: Forced TypeScript to ignore the module shape using 'as any' 🔥
+      const jspdfModule = (await import("jspdf")) as any;
+      const jsPDF = jspdfModule.default ? jspdfModule.default : jspdfModule.jsPDF;
       const pdf = new jsPDF("p", "mm", "a4");
       
       const PW = pdf.internal.pageSize.getWidth();   // 210

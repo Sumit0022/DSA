@@ -22,7 +22,7 @@ interface Member {
   roleLevel?: string;
   roleTitle?: string;
   roleLocation?: string;
-  points?: number; // 🔥 Points logic added
+  points?: number; 
   joinedAt: Timestamp | any;
 }
 
@@ -46,7 +46,7 @@ function MembersLedgerContent() {
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 🔥 NEW STATES FOR DYNAMIC HIERARCHY & VACANCY 🔥
+  // NEW STATES FOR DYNAMIC HIERARCHY & VACANCY
   const [hierarchyData, setHierarchyData] = useState<any>(null);
   const [leaders, setLeaders] = useState<any[]>([]);
   const [vacancyData, setVacancyData] = useState<{title: string, maxLimit: number, filled: number, isAvailable: boolean}[]>([]);
@@ -64,6 +64,69 @@ function MembersLedgerContent() {
       });
     } catch (error) {
       console.error("Notification Dispatch Error:", error);
+    }
+  };
+
+  // 🔥 CORE HELPER: AUTOMATIC PRESS WIRE PUBLISHER 🔥
+  const dispatchAutoPressRelease = async (actionType: "appoint" | "dismiss", memberDetails: any, roleDisplay: string, locDisplay: string, jurisdictionLvl: string, targetState: string, targetDist: string) => {
+    try {
+      let content = "";
+      let caption = "";
+
+      if (actionType === "appoint") {
+        caption = `🚨 NEW APPOINTMENT: ${memberDetails.name} appointed as ${roleDisplay} for ${locDisplay}.`;
+        content = `By the decisive authority of the High Command, the Democratic Social Alliance officially appoints ${memberDetails.name} to the office of ${roleDisplay} for ${locDisplay}. 
+
+Their dedication to the organization's vision has warranted this command clearance. They are expected to assume operational duties with immediate effect and execute the mandates with absolute integrity.`;
+      } else if (actionType === "dismiss") {
+        caption = `⚠️ COMMAND REVOKED: ${memberDetails.name} removed from ${roleDisplay} for ${locDisplay}.`;
+        content = `Maintaining our absolute commitment to uncompromised integrity, discipline, and organizational protocol, the High Command has officially revoked the command clearance of ${memberDetails.name} from the office of ${roleDisplay} for ${locDisplay}. 
+
+This decision is effective immediately, and all administrative access linked to this profile stands completely terminated.`;
+      }
+
+      // 🔥 ALWAYS FETCH NATIONAL PRESIDENT FOR SIGNATURES 🔥
+      const membersRef = collection(db, "members");
+      let sigName = "High Command";
+      let sigTitle = "National President";
+      let sigSignature = null;
+
+      try {
+        const sigQuery = query(membersRef, where("roleLevel", "==", "National"), where("roleTitle", "in", ["President", "National President"]));
+        const sigSnap = await getDocs(sigQuery);
+        
+        if (!sigSnap.empty) {
+          const sigData = sigSnap.docs[0].data();
+          sigName = sigData.name;
+          sigTitle = sigData.role || "National President";
+          sigSignature = sigData.signatureUrl || sigData.signature || sigData.signatureImage || sigData.profilePic || null;
+        } else {
+          sigTitle = "Acting National President";
+        }
+      } catch (err) {
+        console.error("Signature Fetch Error:", err);
+      }
+
+      // Push to Press Releases
+      await addDoc(collection(db, "press_releases"), {
+        caption: caption,
+        content: content,
+        jurisdictionLevel: jurisdictionLvl,
+        targetState: targetState || "",
+        targetDistrict: targetDist || "",
+        locationDisplay: locDisplay,
+        refNumber: `DSA/PR/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
+        status: "published",
+        scheduledFor: null,
+        signatoryName: sigName,
+        signatoryTitle: sigTitle,
+        signatorySignature: sigSignature,
+        createdAt: serverTimestamp(),
+        issuedBy: "System_Automation"
+      });
+
+    } catch (err) {
+      console.error("Auto Press Release Failed:", err);
     }
   };
 
@@ -90,7 +153,6 @@ function MembersLedgerContent() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const docs: any[] = [];
       snapshot.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
-      // Filter out non-leaders just in case
       setLeaders(docs.filter(d => d.role !== "active_member" && d.roleLevel));
     });
     return () => unsubscribe();
@@ -108,7 +170,6 @@ function MembersLedgerContent() {
       tiers.forEach((tier: any) => {
         if (tier.titles) {
           tier.titles.forEach((t: any) => {
-            // Count filled posts based on exact level and region
             const filledCount = leaders.filter((l: any) => {
               const levelMatch = l.roleLevel === assignLevel;
               const titleMatch = l.roleTitle === t.title;
@@ -133,7 +194,6 @@ function MembersLedgerContent() {
       });
       setVacancyData(computedVacancies);
       
-      // Auto-select the first available title
       const available = computedVacancies.filter(v => v.isAvailable);
       if (available.length > 0 && !available.find(v => v.title === assignTitle)) {
         setAssignTitle(available[0].title);
@@ -204,16 +264,18 @@ function MembersLedgerContent() {
         roleTitle: assignTitle,
         roleLocation: location,
         appointmentDate: serverTimestamp(),
-        termYears: 2 // Default term assign from ledger
+        termYears: 2 
       });
       
-      // 🔥 Dispatch Notification for Appointment 🔥
       await sendNotification(
         selectedMemberForRole.id, 
         "Official Appointment Confirmed", 
         `You have been officially appointed as the ${combinedRoleDisplay}. Please review your workspace for operational directives.`, 
         "success"
       );
+
+      // 🔥 FIRE AUTO PRESS RELEASE 🔥
+      await dispatchAutoPressRelease("appoint", selectedMemberForRole, combinedRoleDisplay, location, assignLevel, selectedMemberForRole.state, selectedMemberForRole.district);
 
       setMembers(members.map(m => 
         m.id === selectedMemberForRole.id 
@@ -236,18 +298,22 @@ function MembersLedgerContent() {
     
     try {
       const pastRole = selectedMemberForRole.role || selectedMemberForRole.roleTitle;
+      const pastLocation = selectedMemberForRole.roleLocation || "India";
+      const pastLevel = selectedMemberForRole.roleLevel || "National";
 
       await updateDoc(doc(db, "members", selectedMemberForRole.id), {
         role: null, roleLevel: null, roleTitle: null, roleLocation: null, appointmentDate: null, termYears: null
       });
       
-      // 🔥 Dispatch Notification for Removal 🔥
       await sendNotification(
         selectedMemberForRole.id, 
         "Command Clearance Revoked", 
         `Your assignment as ${pastRole} has been terminated by the High Command. Your access to the leadership workspace is now restricted.`, 
         "alert"
       );
+
+      // 🔥 FIRE AUTO PRESS RELEASE 🔥
+      await dispatchAutoPressRelease("dismiss", selectedMemberForRole, pastRole as string, pastLocation, pastLevel, selectedMemberForRole.state, selectedMemberForRole.district);
 
       setMembers(members.map(m => 
         m.id === selectedMemberForRole.id 
@@ -263,7 +329,6 @@ function MembersLedgerContent() {
     }
   };
 
-  // 🔥 DELETE MEMBER LOGIC 🔥
   const handleDeleteMember = async () => {
     if (!memberToDelete) return;
     setIsDeleting(true);
@@ -312,7 +377,6 @@ function MembersLedgerContent() {
                 <th className="px-6 py-5 font-bold">Identity</th>
                 <th className="px-6 py-5 font-bold">Contact</th>
                 <th className="px-6 py-5 font-bold">Region & Post</th>
-                {/* 🔥 POINTS ADDED TO TABLE HEADER 🔥 */}
                 <th className="px-6 py-5 font-bold text-center">Action Pts</th>
                 <th className="px-6 py-5 font-bold text-center">Status</th>
                 <th className="px-6 py-5 font-bold text-right">Actions</th>
@@ -356,7 +420,6 @@ function MembersLedgerContent() {
                       )}
                     </td>
 
-                    {/* 🔥 POINTS VALUE RENDERED 🔥 */}
                     <td className="px-6 py-4 text-center">
                       <span className="inline-flex items-center gap-1 font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200 text-xs">
                         <Star className="w-3.5 h-3.5 fill-amber-500" /> {member.points || 0}
@@ -484,7 +547,6 @@ function MembersLedgerContent() {
                       )}
                     </select>
                     
-                    {/* RED ALERT FOR FULL POSTS */}
                     {vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable) && (
                       <div className="mt-3 flex items-start gap-1.5 p-3 bg-red-50 border border-red-100 rounded-lg">
                         <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
@@ -531,7 +593,6 @@ function MembersLedgerContent() {
         )}
       </AnimatePresence>
 
-      {/* 🔥 DELETE CONFIRMATION MODAL 🔥 */}
       <AnimatePresence>
         {memberToDelete && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -569,7 +630,6 @@ function MembersLedgerContent() {
   );
 }
 
-// 4. Wrap with Suspense for Vercel
 export default function MembersLedger() {
   return (
     <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading ledger...</div>}>

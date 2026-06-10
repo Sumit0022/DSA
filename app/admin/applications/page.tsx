@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, ShieldCheck, XCircle, CheckCircle, Send, MessageSquare, MapPin, Paperclip, Info, Phone, Mail, Clock, User, Loader2, X, ArrowLeft, Crown, CalendarDays, Power, AlertTriangle, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, getDoc, where, addDoc } from "firebase/firestore";
+import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, getDoc, where, addDoc, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 const TERM_LENGTHS = ["6 Months", "1 Year", "2 Years", "3 Years", "5 Years"];
@@ -55,6 +55,59 @@ export default function ApplicationsInbox() {
       });
     } catch (error) {
       console.error("Notification Dispatch Error:", error);
+    }
+  };
+
+  // 🔥 CORE HELPER: AUTOMATIC PRESS WIRE PUBLISHER FOR APPLICATIONS 🔥
+  const dispatchAutoPressRelease = async (memberDetails: any, roleDisplay: string, locDisplay: string) => {
+    try {
+      const caption = `🚨 NEW APPOINTMENT: ${memberDetails.name} appointed as ${roleDisplay} for ${locDisplay}.`;
+      const content = `By the decisive authority of the High Command, the Democratic Social Alliance officially appoints ${memberDetails.name} to the office of ${roleDisplay} for ${locDisplay}. 
+
+Their dedication to the organization's vision has warranted this command clearance. They are expected to assume operational duties with immediate effect and execute the mandates with absolute integrity.`;
+
+      // 🔥 ALWAYS FETCH NATIONAL PRESIDENT FOR SIGNATURES 🔥
+      const membersRef = collection(db, "members");
+      let sigName = "High Command";
+      let sigTitle = "National President";
+      let sigSignature = null;
+
+      try {
+        const sigQuery = query(membersRef, where("roleLevel", "==", "National"), where("roleTitle", "in", ["President", "National President"]));
+        const sigSnap = await getDocs(sigQuery);
+        
+        if (!sigSnap.empty) {
+          const sigData = sigSnap.docs[0].data();
+          sigName = sigData.name;
+          sigTitle = sigData.role || "National President";
+          sigSignature = sigData.signatureUrl || sigData.signature || sigData.signatureImage || sigData.profilePic || null;
+        } else {
+          sigTitle = "Acting National President";
+        }
+      } catch (err) {
+        console.error("Signature Fetch Error:", err);
+      }
+
+      // Push to Press Releases
+      await addDoc(collection(db, "press_releases"), {
+        caption: caption,
+        content: content,
+        jurisdictionLevel: assignLevel,
+        targetState: memberDetails.state || "",
+        targetDistrict: memberDetails.district || "",
+        locationDisplay: locDisplay,
+        refNumber: `DSA/PR/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
+        status: "published",
+        scheduledFor: null,
+        signatoryName: sigName,
+        signatoryTitle: sigTitle,
+        signatorySignature: sigSignature,
+        createdAt: serverTimestamp(),
+        issuedBy: "System_Automation"
+      });
+
+    } catch (err) {
+      console.error("Auto Press Release Failed:", err);
     }
   };
 
@@ -218,7 +271,6 @@ export default function ApplicationsInbox() {
         messages: [...(activeApp.messages || []), newMessage]
       });
       
-      // Auto-alert user of new inbox message
       await sendNotification(
         activeApp.userId, 
         "Application Chat Update", 
@@ -246,7 +298,6 @@ export default function ApplicationsInbox() {
           messages: [...(activeApp.messages || []), rejectMsg]
         });
 
-        // 🔥 Dispatch Rejection Notification 🔥
         await sendNotification(
           activeApp.userId, 
           "Application Rejected", 
@@ -307,13 +358,15 @@ export default function ApplicationsInbox() {
         messages: [...(activeApp.messages || []), congratsMsg]
       });
 
-      // 🔥 Dispatch Approval Notification 🔥
       await sendNotification(
         activeApp.userId, 
         "Application Approved", 
         `Congratulations! Your application has been approved. You are now the ${combinedRoleDisplay}. Welcome to the leadership cadre!`, 
         "success"
       );
+
+      // 🔥 AUTO DISPATCH PRESS WIRE MANDATE 🔥
+      await dispatchAutoPressRelease(activeApp, combinedRoleDisplay, location);
 
       setShowRoleModal(false);
     } catch (error) {
@@ -501,7 +554,7 @@ export default function ApplicationsInbox() {
                   disabled={isProcessing || !assignTitle || (vacancyData.length > 0 && vacancyData.every(v => !v.isAvailable))} 
                   className="w-full py-3 md:py-3.5 bg-green-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
                 >
-                  {isProcessing ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Crown className="w-4 h-4 md:w-5 md:h-5" />}
+                  {isProcessing ? <Loader2 className="w-4 h-4 md:w-5 h-5 animate-spin" /> : <Crown className="w-4 h-4 md:w-5 h-5" />}
                   Confirm Appointment
                 </button>
               </form>

@@ -69,6 +69,75 @@ export default function ManageLeadersPage() {
     }
   };
 
+  // 🔥 CORE HELPER: AUTOMATIC PRESS WIRE PUBLISHER 🔥
+  const dispatchAutoPressRelease = async (actionType: "appoint" | "promote" | "dismiss", memberDetails: any, roleDisplay: string) => {
+    try {
+      let content = "";
+      let caption = "";
+      const locDisplay = activeTab === "National" ? "All India" : activeTab === "State" ? selectedState : `${selectedDistrict}, ${selectedState}`;
+
+      if (actionType === "appoint") {
+        caption = `🚨 NEW APPOINTMENT: ${memberDetails.name} appointed as ${roleDisplay} for ${locDisplay}.`;
+        content = `By the decisive authority of the High Command, the Democratic Social Alliance officially appoints ${memberDetails.name} to the office of ${roleDisplay} for ${locDisplay}. 
+Their dedication to the organization's vision has warranted this command clearance. They are expected to assume operational duties with immediate effect and execute the mandates with absolute integrity.`;
+      } else if (actionType === "promote") {
+        caption = `⚡ PROMOTION: ${memberDetails.name} elevated to ${roleDisplay} for ${locDisplay}.`;
+        content = `By the decisive authority of the High Command, the Democratic Social Alliance officially elevates ${memberDetails.name} to the office of ${roleDisplay} for ${locDisplay}. 
+
+This promotion stands as a testament to their unwavering discipline and leadership. They are directed to take full charge of their new jurisdiction effective immediately.`;
+      } else if (actionType === "dismiss") {
+        caption = `⚠️ COMMAND REVOKED: ${memberDetails.name} removed from ${roleDisplay} for ${locDisplay}.`;
+        content = `Maintaining our absolute commitment to uncompromised integrity, discipline, and organizational protocol, the High Command has officially revoked the command clearance of ${memberDetails.name} from the office of ${roleDisplay} for ${locDisplay}. 
+
+This decision is effective immediately, and all administrative access linked to this profile stands completely terminated.`;
+      }
+
+      // 🔥 ALWAYS FETCH NATIONAL PRESIDENT FOR SIGNATURES 🔥
+      const membersRef = collection(db, "members");
+      let sigName = "High Command";
+      let sigTitle = "National President";
+      let sigSignature = null;
+
+      try {
+        const sigQuery = query(membersRef, where("roleLevel", "==", "National"), where("roleTitle", "in", ["President", "National President"]));
+        const sigSnap = await getDocs(sigQuery);
+        
+        if (!sigSnap.empty) {
+          const sigData = sigSnap.docs[0].data();
+          sigName = sigData.name;
+          sigTitle = sigData.role || "National President";
+          sigSignature = sigData.signatureUrl || sigData.signature || sigData.signatureImage || sigData.profilePic || null;
+        } else {
+          sigTitle = "Acting National President";
+        }
+      } catch (err) {
+        console.error("Signature Fetch Error:", err);
+      }
+
+      // Push to Press Releases
+      await addDoc(collection(db, "press_releases"), {
+        caption: caption,
+        content: content,
+        jurisdictionLevel: activeTab,
+        targetState: selectedState || "",
+        targetDistrict: selectedDistrict || "",
+        locationDisplay: locDisplay,
+        refNumber: `DSA/PR/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
+        status: "published",
+        scheduledFor: null,
+        signatoryName: sigName,
+        signatoryTitle: sigTitle,
+        signatorySignature: sigSignature,
+        createdAt: serverTimestamp(),
+        issuedBy: "System_Automation"
+      });
+
+    } catch (err) {
+      console.error("Auto Press Release Failed:", err);
+    }
+  };
+
+
   // ─── INITIAL FETCH ───────────────────────────────────────────────────
   useEffect(() => {
     const fetchLocations = async () => {
@@ -188,6 +257,9 @@ export default function ManageLeadersPage() {
         "success"
       );
 
+      // 🔥 FIRE AUTO PRESS RELEASE 🔥
+      await dispatchAutoPressRelease("appoint", foundMember, combinedRoleDisplay);
+
       showToast(`${foundMember.name} appointed as ${selectedPost}`, "success");
       setAppointModal(false); resetForms();
     } catch (err) { showToast("Failed to appoint.", "error"); }
@@ -218,6 +290,9 @@ export default function ManageLeadersPage() {
         "success"
       );
 
+      // 🔥 FIRE AUTO PRESS RELEASE 🔥
+      await dispatchAutoPressRelease("promote", promoteModal, combinedRoleDisplay);
+
       showToast(`Promoted to ${selectedPost}`, "success");
       setPromoteModal(null); resetForms();
     } catch (err) { showToast("Failed to promote.", "error"); }
@@ -245,6 +320,9 @@ export default function ManageLeadersPage() {
         `Your assignment as ${pastRole} has been terminated by the High Command. Your access to the leadership workspace is now restricted.`, 
         "alert"
       );
+
+      // 🔥 FIRE AUTO PRESS RELEASE 🔥
+      await dispatchAutoPressRelease("dismiss", dismissModal, pastRole);
 
       showToast(`${dismissModal.name} has been dismissed from post.`, "success");
       setDismissModal(null);

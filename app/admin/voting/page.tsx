@@ -407,6 +407,11 @@ export default function AdminVotingDashboard() {
 
       const totalVotes = ballotsSnap.size;
 
+      // Variables for Automation
+      let autoPressContent = "";
+      let winnerName = "";
+      let newRoleDisplay = "";
+
       if (election.type === "appointment") {
         let winnerId = "";
         let maxVotes = -1;
@@ -423,7 +428,8 @@ export default function AdminVotingDashboard() {
           const oldRoleDisplay = winnerData?.role || null;
           const oldRoleLoc = winnerData?.roleLocation || null;
 
-          let newRoleDisplay = `${election.jurisdictionLevel} ${election.targetPost}`;
+          winnerName = winnerData?.name || "Unknown";
+          newRoleDisplay = `${election.jurisdictionLevel} ${election.targetPost}`;
           newRoleDisplay = newRoleDisplay.replace(/National National/ig, "National").replace(/State State/ig, "State").replace(/District District/ig, "District");
 
           await updateDoc(winnerRef, {
@@ -448,13 +454,20 @@ export default function AdminVotingDashboard() {
 
           winnerDetails = {
             id: winnerId,
-            name: winnerData?.name || "Unknown",
+            name: winnerName,
             preElectionPost: oldRoleDisplay || "Active Citizen (No Post)",
             preElectionLoc: oldRoleLoc || "N/A",
             postElectionPost: newRoleDisplay,
             postElectionLoc: election.locationDisplay,
             isPostVacated: !!oldRoleDisplay
           };
+
+          // 🔥 BUILD PRESS RELEASE TEXT FOR APPOINTMENT 🔥
+          autoPressContent = `The Democratic Social Alliance Election Commission has officially concluded the electoral protocol for the position of ${newRoleDisplay} in ${election.locationDisplay}. 
+
+After a transparent and rigorous democratic process, ${winnerName} has secured the absolute mandate of the cadre. 
+
+Effective immediately, they are hereby officially appointed to the office. We extend our highest directives for their upcoming tenure and expect full cooperation from all administrative wings.`;
         }
         
         await updateDoc(doc(db, "elections", election.id), { 
@@ -473,6 +486,19 @@ export default function AdminVotingDashboard() {
           voteDistribution: voteCounts,
           peakHour: peakHour
         });
+
+        // 🔥 BUILD PRESS RELEASE TEXT FOR RESOLUTION 🔥
+        let maxResVotes = -1;
+        let winningRes = "";
+        for (const [id, count] of Object.entries(voteCounts)) {
+          if (count > maxResVotes) { maxResVotes = count; winningRes = id; }
+        }
+        
+        autoPressContent = `The Democratic Social Alliance has concluded the public resolution regarding: "${election.title}".
+
+The mandate has been declared. By absolute majority, the cadre has resolved: "${winningRes}". 
+
+This resolution stands adopted as official directive within ${election.locationDisplay}, effective immediately.`;
       }
 
       // 🔥 AUTO-NOTIFICATIONS TO ALL VOTERS ON RESULT DECLARATION 🔥
@@ -522,7 +548,50 @@ export default function AdminVotingDashboard() {
 
       for (const b of resBatchArray) { await b.commit(); }
 
-      showToast("Results declared and mandate executed successfully.", "success");
+
+      // 🚀🚀🚀 THE AUTONOMOUS PRESS WIRE BRIDGE 🚀🚀🚀
+      if (autoPressContent) {
+        let sigName = "High Command";
+        let sigTitle = "Authorized Signatory";
+        let sigSignature = null;
+
+        // 🔥 ALWAYS FETCH NATIONAL PRESIDENT FOR SIGNATURES 🔥
+        try {
+          const sigQuery = query(membersRef, where("roleLevel", "==", "National"), where("roleTitle", "in", ["President", "National President"]));
+          const sigSnap = await getDocs(sigQuery);
+          
+          if (!sigSnap.empty) {
+            const sigData = sigSnap.docs[0].data();
+            sigName = sigData.name;
+            sigTitle = sigData.role || "National President";
+            sigSignature = sigData.signatureUrl || sigData.signature || sigData.signatureImage || sigData.profilePic || null;
+          } else {
+            sigTitle = "Acting National President";
+          }
+        } catch (err) {
+          console.error("Signature Fetch Error:", err);
+        }
+
+        // Push directly to press_releases
+        await addDoc(collection(db, "press_releases"), {
+          caption: `🚨 OFFICIAL MANDATE DECLARED: ${election.title} in ${election.locationDisplay}.`,
+          content: autoPressContent,
+          jurisdictionLevel: election.jurisdictionLevel,
+          targetState: election.targetState || "",
+          targetDistrict: election.targetDistrict || "",
+          locationDisplay: election.locationDisplay,
+          refNumber: `DSA/PR/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
+          status: "published",
+          scheduledFor: null,
+          signatoryName: sigName,
+          signatoryTitle: sigTitle,
+          signatorySignature: sigSignature,
+          createdAt: serverTimestamp(),
+          issuedBy: "System_Automation"
+        });
+      }
+
+      showToast("Results declared, notifications sent, and Official Press Release published successfully.", "success");
     } catch (error: any) {
       console.error("Error executing mandate:", error);
       showToast("Failed to declare results: " + error.message, "error");

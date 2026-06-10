@@ -73,9 +73,9 @@ export default function CitizenPassPage() {
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
         <ShieldCheck className="w-5 h-5 text-[#007AFF] shrink-0 mt-0.5" />
         <div>
-          <h4 className="text-sm font-bold text-blue-900">Always carry your digital pass</h4>
+          <h4 className="text-sm font-bold text-blue-900">Always carry your digital membership card</h4>
           <p className="text-xs text-blue-800/80 mt-1">
-            This pass serves as your entry ticket to local chapter meetings and official voting polls within your district. Keep it secure.
+            This card serves as your entry ticket to local chapter meetings and official operations. Keep it secure.
           </p>
         </div>
       </div>

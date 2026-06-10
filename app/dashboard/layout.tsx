@@ -4,24 +4,21 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Shield, Eye, UserCircle, LogOut, Menu, X, Users } from "lucide-react";
+import { LayoutDashboard, Shield, Eye, UserCircle, LogOut, Menu, X, Users, HeartHandshake, Calendar, ClipboardList, CheckSquare, Coins, IdCard } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getAuth, signOut } from "firebase/auth";
 import { useUser } from "@/hooks/useUser";
-import { HeartHandshake} from "lucide-react";
-import { Calendar} from "lucide-react";
-import { ClipboardList } from "lucide-react";
-import { CheckSquare } from "lucide-react";
 
 const citizenLinks = [
-  { name: "My HQ", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Freedom Pass", href: "/dashboard/pass", icon: Shield },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "My Profile", href: "/dashboard/profile", icon: UserCircle },
+  { name: "Membership Card", href: "/dashboard/pass", icon: IdCard },
+  { name: "Reward Points", href: "/dashboard/progress", icon: Coins },
   { name: "Meetings", href: "/dashboard/meetings", icon: Calendar },
+  { name: "View Leaders", href: "/dashboard/leaders", icon: Users },
   { name: "Voting", href: "/dashboard/voting", icon: CheckSquare },
   { name: "Watchdog Feed", href: "/dashboard/watchdog", icon: Eye },
-  { name: "Local Leaders", href: "/dashboard/leaders", icon: Users },
   { name: "Donate", href: "/dashboard/donate", icon: HeartHandshake },
-  { name: "My Profile", href: "/dashboard/profile", icon: UserCircle },
 ];
 
 export default function CitizenLayout({ children }: { children: React.ReactNode }) {
@@ -54,10 +51,11 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
       {/* MOBILE HEADER */}
       <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4 shadow-sm">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#007AFF] rounded-lg flex items-center justify-center">
-            <Shield className="w-5 h-5 text-white" />
+          {/* 🔥 MODIFIED: DSA Logo & Dashboard Text (Mobile Header) */}
+          <div className="w-8 h-8 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+            <img src="/dsa-logo.png" alt="DSA Logo" className="w-5 h-5 object-contain" />
           </div>
-          <span className="font-black text-gray-900 tracking-tight text-lg">CITIZEN HQ</span>
+          <span className="font-black text-gray-900 tracking-tight text-lg uppercase">DASHBOARD</span>
         </Link>
         
         <button 
@@ -94,10 +92,11 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
             {/* Sidebar Header */}
             <div className="flex h-16 items-center justify-between gap-3 px-6 border-b border-gray-100 shrink-0">
               <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 cursor-pointer">
-                <div className="w-9 h-9 bg-gradient-to-br from-[#007AFF] to-blue-600 rounded-xl flex items-center justify-center shadow-md">
-                  <Shield className="w-5 h-5 text-white" />
+                {/* 🔥 MODIFIED: DSA Logo & Dashboard Text (Mobile Drawer) */}
+                <div className="w-9 h-9 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                  <img src="/dsa-logo.png" alt="DSA Logo" className="w-6 h-6 object-contain" />
                 </div>
-                <span className="font-black text-gray-900 tracking-tight text-lg">CITIZEN HQ</span>
+                <span className="font-black text-gray-900 tracking-tight text-lg uppercase">DASHBOARD</span>
               </Link>
               <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full">
                 <X className="w-5 h-5" />
@@ -158,10 +157,11 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
         {/* Sidebar Header */}
         <div className="flex h-20 items-center justify-between gap-3 px-6 border-b border-gray-100 shrink-0">
           <Link href="/dashboard" className="flex items-center gap-3 cursor-pointer">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#007AFF] to-blue-600 rounded-xl flex items-center justify-center shadow-md">
-              <Shield className="w-5 h-5 text-white" />
+            {/* 🔥 MODIFIED: DSA Logo & Dashboard Text (Desktop Sidebar) */}
+            <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+              <img src="/dsa-logo.png" alt="DSA Logo" className="w-7 h-7 object-contain" />
             </div>
-            <span className="font-black text-gray-900 tracking-tight text-xl">CITIZEN HQ</span>
+            <span className="font-black text-gray-900 tracking-tight text-xl uppercase">DASHBOARD</span>
           </Link>
         </div>
 

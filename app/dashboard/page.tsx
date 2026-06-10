@@ -1,13 +1,14 @@
 // app/dashboard/page.tsx
 "use client";
 
-import { ShieldCheck, MapPin, Eye, ArrowRight, Loader2, Bell, UserCircle, Calendar, Clock } from "lucide-react";
+import { ShieldCheck, MapPin, Eye, ArrowRight, Loader2, Bell, UserCircle, Calendar, Clock, Award, Activity, FileSignature, Megaphone, ChevronRight, Users, HeartHandshake, CheckSquare, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import DigitalPass from "@/components/DigitalPass";
 import { useUser } from "@/hooks/useUser"; 
 import { useState, useEffect } from "react";
-import { collection, query, orderBy, getDocs, where, onSnapshot } from "firebase/firestore";
+import { collection, query, orderBy, getDocs, where, onSnapshot, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { motion } from "framer-motion";
 
 export default function CitizenDashboard() {
   const { userData, loadingUser } = useUser();
@@ -17,8 +18,11 @@ export default function CitizenDashboard() {
   // 🚀 UPCOMING MEETINGS STATE 🚀
   const [upcomingMeets, setUpcomingMeets] = useState<any[]>([]);
   
-  // 🔔 UNREAD NOTIFICATIONS ALERT STATE 🔔
+  // 🔔 UNREAD NOTIFICATIONS, PETITIONS & VOTING STATE 🔔
   const [unreadCount, setUnreadCount] = useState(0);
+  const [activePetitions, setActivePetitions] = useState<any[]>([]);
+  const [loadingPetitions, setLoadingPetitions] = useState(true);
+  const [activeVoteCount, setActiveVoteCount] = useState(0); // For Smart Voting Button
 
   // Watchdog Fetcher
   useEffect(() => {
@@ -34,7 +38,7 @@ export default function CitizenDashboard() {
             posts.push({ id: doc.id, ...data });
           }
         });
-        setRecentWatchdogs(posts.slice(0, 3));
+        setRecentWatchdogs(posts.slice(0, 2)); // Show only top 2
       } catch (error) {
         console.error("Error fetching watchdogs", error);
       } finally {
@@ -44,11 +48,53 @@ export default function CitizenDashboard() {
     fetchWatchdogs();
   }, []);
 
+  // 🔥 UPDATED: Live Campaigns/Petitions Fetcher (Only Boosted, Index-Safe) 🔥
+  useEffect(() => {
+    const fetchPetitions = async () => {
+      try {
+        // Fetch only boosted petitions
+        const q = query(collection(db, "petitions"), where("isBoosted", "==", true));
+        
+        const unsub = onSnapshot(q, (snap) => {
+          const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          
+          // In-memory sort by createdAt to bypass the need for a composite index
+          docs.sort((a: any, b: any) => {
+            const timeA = a.createdAt?.toMillis() || 0;
+            const timeB = b.createdAt?.toMillis() || 0;
+            return timeB - timeA;
+          });
+
+          // Slice top 2 most recent boosted petitions
+          setActivePetitions(docs.slice(0, 2));
+          setLoadingPetitions(false);
+        });
+        return () => unsub();
+      } catch (error) {
+        console.error("Error fetching petitions", error);
+        setLoadingPetitions(false);
+      }
+    };
+    fetchPetitions();
+  }, []);
+
+  // 🔴 SMART VOTING LIVE CHECKER 🔴
+  useEffect(() => {
+    try {
+      const q = query(collection(db, "polls"), where("status", "==", "Active"));
+      const unsub = onSnapshot(q, (snap) => {
+        setActiveVoteCount(snap.docs.length);
+      });
+      return () => unsub();
+    } catch (error) {
+      console.error("Error fetching active polls", error);
+    }
+  }, []);
+
   // 🚀 UPCOMING MEETINGS RADAR FETCHER 🚀
   useEffect(() => {
     if (!userData?.state) return;
 
-    // Same advanced matcher from meetings page
     const isAudienceMatched = (meetingTarget: string, userRole: string) => {
       if (!meetingTarget || meetingTarget.includes("All")) return true;
       const r = (userRole || "").toLowerCase();
@@ -75,37 +121,26 @@ export default function CitizenDashboard() {
         const meet = doc.data();
         const meetDate = new Date(meet.date);
         
-        // Filter logic: Only next 3 days + Not completed
         if (meet.attendanceStatus !== 'Completed' && meetDate >= today && meetDate <= threeDaysLater) {
-          // Jurisdiction Check
           if (meet.jurisdictionState === "National" || meet.jurisdictionState === "All India" || meet.jurisdictionDistrict === "State Wide" || meet.jurisdictionDistrict === userData.district) {
-             // Audience Check
              if (isAudienceMatched(meet.targetAudience, userData.role)) {
                 docs.push({ id: doc.id, ...meet });
              }
           }
         }
       });
-      // Sort by date closest first
       setUpcomingMeets(docs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
     });
     return () => unsubscribe();
   }, [userData]);
 
-
   // 🔔 UNREAD NOTIFICATIONS FETCHER 🔔
   useEffect(() => {
     if (!userData?.id) return;
-    const notifQuery = query(
-      collection(db, "notifications"), 
-      where("userId", "==", userData.id),
-      where("isRead", "==", false)
-    );
-    
+    const notifQuery = query(collection(db, "notifications"), where("userId", "==", userData.id), where("isRead", "==", false));
     const unsubscribe = onSnapshot(notifQuery, (snapshot) => {
       setUnreadCount(snapshot.docs.length);
     });
-
     return () => unsubscribe();
   }, [userData?.id]);
 
@@ -114,7 +149,7 @@ export default function CitizenDashboard() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400">
         <Loader2 className="w-8 h-8 animate-spin mb-4 text-[#007AFF]" />
-        <p className="font-medium text-sm md:text-base">Loading your HQ...</p>
+        <p className="font-medium text-sm md:text-base tracking-widest uppercase">Loading your Dashboard...</p>
       </div>
     );
   }
@@ -137,11 +172,12 @@ export default function CitizenDashboard() {
           <h2 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">
             Welcome, {userData.name.split(" ")[0]}
           </h2>
-          <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5 md:mt-1">Secure Session Active</p>
+          <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5 md:mt-1 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Secure Session Active
+          </p>
         </div>
         
         <div className="flex items-center gap-3 md:gap-5">
-          {/* 🔔 LIVE FUNCTIONAL NOTIFICATION BELL (Visible on both Mobile & PC) 🔔 */}
           <Link href="/dashboard/notifications" className="relative p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
             <Bell className="w-6 h-6 md:w-5 md:h-5" />
             {unreadCount > 0 && (
@@ -153,11 +189,10 @@ export default function CitizenDashboard() {
           
           <div className="hidden sm:block w-px h-8 bg-gray-200"></div>
           
-          {/* 👤 PROFILE BUTTON (Hidden on Mobile, Clickable on PC) 👤 */}
           <Link href="/dashboard/profile" className="hidden sm:flex items-center gap-2 md:gap-3 group">
             <div className="text-right">
               <p className="text-sm font-bold text-gray-900 group-hover:text-[#007AFF] transition-colors">Verified Member</p>
-              <p className="text-[10px] font-bold text-[#34C759] uppercase tracking-widest">Active Status</p>
+              <p className="text-[10px] font-bold text-[#34C759] uppercase tracking-widest">{userData.roleLevel || 'Citizen'}</p>
             </div>
             <div className="w-8 h-8 md:w-10 md:h-10 bg-white rounded-full border border-gray-200 flex items-center justify-center shadow-sm overflow-hidden group-hover:border-[#007AFF] transition-colors">
               {userData.profilePic || userData.profileImage || userData.photoURL ? (
@@ -170,9 +205,40 @@ export default function CitizenDashboard() {
         </div>
       </div>
 
-      {/* 🚀 UPCOMING PRIORITY RADAR SECTION (Only visible if meetings exist) 🚀 */}
+      {/* GAMIFICATION & STATS ROW */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center shrink-0">
+            <Award className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Reward Points</p>
+            <p className="text-xl font-black text-gray-900">{userData.points || 0}</p>
+          </div>
+        </div>
+        <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
+            <Activity className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Engagement</p>
+            <p className="text-xl font-black text-gray-900">Active</p>
+          </div>
+        </div>
+        <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 col-span-2 md:col-span-2">
+           <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#007AFF] flex items-center justify-center shrink-0">
+             <MapPin className="w-5 h-5" />
+           </div>
+           <div>
+             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Operating Region</p>
+             <p className="text-sm md:text-base font-black text-gray-900 truncate">{userData.district}, {userData.state}</p>
+           </div>
+        </div>
+      </div>
+
+      {/* 🚀 UPCOMING PRIORITY RADAR SECTION 🚀 */}
       {upcomingMeets.length > 0 && (
-        <div className="mb-8">
+        <div>
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2 ml-1">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse border border-white shadow-sm"></span> Priority Action Radar (Next 3 Days)
           </h3>
@@ -201,82 +267,121 @@ export default function CitizenDashboard() {
         </div>
       )}
 
-      {/* 1. STATUS BANNER */}
-      <div className="bg-gray-900 rounded-2xl md:rounded-3xl p-6 md:p-10 text-white relative overflow-hidden shadow-xl">
-        <div className="absolute top-0 right-0 w-64 h-64 md:w-96 md:h-96 bg-gradient-to-br from-[#007AFF]/20 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="max-w-xl">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 text-[10px] md:text-xs font-bold tracking-widest uppercase border border-white/20 mb-4 md:mb-6 w-max">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#34C759]" /> Verified Citizen
-            </span>
-            <h1 className="text-2xl sm:text-3xl md:text-5xl font-black tracking-tight mb-3 md:mb-4 leading-tight">
-              Ready to create an impact?
-            </h1>
-            <p className="text-gray-400 font-medium text-sm md:text-base leading-relaxed">
-              Your voice matters. Stay updated with local alliance movements and hold the system accountable.
-            </p>
-          </div>
-
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl md:rounded-2xl p-4 flex items-center gap-4 w-full md:w-auto shrink-0">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-white/10 rounded-lg md:rounded-xl flex items-center justify-center shrink-0">
-              <MapPin className="w-5 h-5 md:w-6 md:h-6 text-[#007AFF]" />
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Operating Region</p>
-              <p className="font-bold text-white truncate">{userData.district}, {userData.state}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. GRID SECTION */}
+      {/* MAIN GRID SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
         
-        {/* LEFT COL: WATCHDOG PREVIEW */}
-        <div className="lg:col-span-2 space-y-4 md:space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-black text-gray-900">Latest from the Alliance</h3>
-            <Link href="/dashboard/watchdog" className="text-xs md:text-sm font-bold text-[#007AFF] hover:text-blue-700 transition-colors flex items-center gap-1">
-              View Feed <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
+        {/* LEFT COL: ACTIONS, WATCHDOG, CAMPAIGNS */}
+        <div className="lg:col-span-2 space-y-6 md:space-y-8">
           
-          <div className="bg-white border border-gray-200 rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4 md:mb-6">
-              <Eye className="w-4 h-4 md:w-5 md:h-5 text-red-500" />
-              <h4 className="font-bold text-gray-900 text-sm md:text-base">Watchdog Alerts</h4>
+          {/* QUICK ACTIONS BENTO */}
+          <div>
+            <h3 className="text-lg font-black text-gray-900 mb-4">Command Actions</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
+              
+              {/* BUTTON 1: SMART VOTING */}
+              <Link href="/dashboard/voting" className="bg-white border border-gray-200 p-4 rounded-2xl hover:border-[#007AFF]/30 hover:shadow-lg transition-all group flex flex-col items-center text-center relative overflow-hidden">
+                {activeVoteCount > 0 && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest animate-pulse shadow-sm z-10">
+                    <span className="w-1.5 h-1.5 bg-white rounded-full"></span> Live
+                  </span>
+                )}
+                <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform relative z-10">
+                  <CheckSquare className="w-5 h-5"/>
+                </div>
+                <span className="text-xs font-bold text-gray-900 relative z-10">Voting</span>
+              </Link>
+              
+              {/* BUTTON 2: VIEW PROGRESS */}
+              <Link href="/dashboard/progress" className="bg-white border border-gray-200 p-4 rounded-2xl hover:border-[#007AFF]/30 hover:shadow-lg transition-all group flex flex-col items-center text-center">
+                <div className="w-10 h-10 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <TrendingUp className="w-5 h-5"/>
+                </div>
+                <span className="text-xs font-bold text-gray-900">View Progress</span>
+              </Link>
+
+              {/* BUTTON 3: FIND LEADERS */}
+              <Link href="/dashboard/leaders" className="bg-white border border-gray-200 p-4 rounded-2xl hover:border-[#007AFF]/30 hover:shadow-lg transition-all group flex flex-col items-center text-center">
+                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Users className="w-5 h-5"/></div>
+                <span className="text-xs font-bold text-gray-900">Find Leaders</span>
+              </Link>
+
+              {/* BUTTON 4: DONATE */}
+              <Link href="/dashboard/donate" className="bg-white border border-gray-200 p-4 rounded-2xl hover:border-[#007AFF]/30 hover:shadow-lg transition-all group flex flex-col items-center text-center">
+                <div className="w-10 h-10 bg-pink-50 text-pink-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><HeartHandshake className="w-5 h-5"/></div>
+                <span className="text-xs font-bold text-gray-900">Donate</span>
+              </Link>
+
             </div>
-            
-            <div className="space-y-3 md:space-y-4">
-              {loadingWatchdogs ? (
-                 <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#007AFF]" /></div>
-              ) : recentWatchdogs.length === 0 ? (
-                 <div className="py-8 text-center text-sm text-gray-500">No recent watchdog alerts published yet.</div>
-              ) : (
-                recentWatchdogs.map((post) => (
-                  <Link key={post.id} href={`/dashboard/watchdog/${post.id}`} className="block p-4 rounded-xl md:rounded-2xl bg-gray-50 border border-gray-100 hover:border-gray-200 hover:bg-gray-100 transition-all group">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-                      Alert • {post.createdAt ? new Date(post.createdAt.toDate()).toLocaleDateString() : "Recent"}
-                    </p>
-                    <div className="flex items-start justify-between gap-4">
-                      <h5 className="font-bold text-gray-900 text-sm md:text-base leading-snug line-clamp-2">{post.title}</h5>
-                      <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-900 transition-colors shrink-0 mt-0.5" />
-                    </div>
-                  </Link>
-                ))
-              )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+            {/* WATCHDOG WIDGET */}
+            <div className="bg-white border border-gray-200 rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-sm flex flex-col">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-red-500" />
+                  <h4 className="font-black text-gray-900 text-sm md:text-base">Watchdog Feed</h4>
+                </div>
+                <Link href="/dashboard/watchdog" className="text-[10px] font-bold text-[#007AFF] uppercase tracking-widest hover:underline">View All</Link>
+              </div>
+              <div className="space-y-3 flex-1">
+                {loadingWatchdogs ? (
+                  <div className="py-4 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-gray-300" /></div>
+                ) : recentWatchdogs.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-gray-500">No active alerts in your region.</div>
+                ) : (
+                  recentWatchdogs.map((post) => (
+                    <Link key={post.id} href={`/dashboard/watchdog/${post.id}`} className="block p-4 rounded-xl bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors group">
+                      <p className="text-[9px] font-bold text-red-500 uppercase tracking-widest mb-1">Alert Issued</p>
+                      <h5 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2">{post.title}</h5>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* LIVE CAMPAIGNS WIDGET */}
+            <div className="bg-white border border-gray-200 rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-sm flex flex-col">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <FileSignature className="w-5 h-5 text-[#007AFF]" />
+                  <h4 className="font-black text-gray-900 text-sm md:text-base">Active Campaigns</h4>
+                </div>
+              </div>
+              <div className="space-y-3 flex-1">
+                {loadingPetitions ? (
+                  <div className="py-4 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-gray-300" /></div>
+                ) : activePetitions.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-gray-500">No petitions running currently.</div>
+                ) : (
+                  activePetitions.map((pet) => {
+                     const progress = Math.min(100, Math.round(((pet.signatureCount || 0) / (pet.targetSignatures || 1)) * 100));
+                     return (
+                      <Link key={pet.id} href={`/petition/${pet.id}`} className="block p-4 rounded-xl bg-blue-50/50 border border-blue-100 hover:bg-blue-50 transition-colors group relative overflow-hidden">
+                        <h5 className="font-black text-gray-900 text-sm leading-snug line-clamp-1 mb-2">{pet.title}</h5>
+                        <div className="w-full bg-white rounded-full h-1.5 overflow-hidden">
+                          <div className="bg-[#007AFF] h-full rounded-full" style={{ width: `${progress}%` }} />
+                        </div>
+                        <div className="flex justify-between mt-1.5">
+                           <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Signatures</span>
+                           <span className="text-[10px] font-black text-[#007AFF]">{pet.signatureCount || 0} / {pet.targetSignatures}</span>
+                        </div>
+                      </Link>
+                     )
+                  })
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* RIGHT COL: QUICK IDENTITY */}
         <div className="space-y-4 md:space-y-6">
-          <h3 className="text-lg font-black text-gray-900">Your Identity</h3>
+          <h3 className="text-lg font-black text-gray-900">Your Citizen Pass</h3>
           <div className="bg-white border border-gray-200 rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-sm flex flex-col items-center overflow-hidden">
             
             <div className="w-full flex justify-center py-2">
-              <div className="w-[380px] shrink-0 flex justify-center transform origin-top scale-[0.75] sm:scale-[0.85] md:scale-100 lg:scale-[0.70] xl:scale-[0.85] transition-transform duration-300 ease-in-out -mb-[80px] sm:-mb-[30px] md:mb-0 lg:-mb-[100px] xl:-mb-[50px]">
+              <div className="w-[380px] shrink-0 flex justify-center transform origin-top scale-[0.75] sm:scale-[0.85] md:scale-[0.90] lg:scale-[0.70] xl:scale-[0.85] transition-transform duration-300 ease-in-out -mb-[80px] sm:-mb-[30px] md:mb-0 lg:-mb-[100px] xl:-mb-[50px]">
                 <DigitalPass 
                   name={userData.name}
                   state={userData.state}
@@ -288,9 +393,9 @@ export default function CitizenDashboard() {
             
             <Link 
               href="/dashboard/pass"
-              className="mt-4 md:mt-2 w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-900 font-bold text-sm text-center rounded-xl transition-colors border border-gray-200 shadow-sm relative z-10"
+              className="mt-4 md:mt-2 w-full py-3 bg-gray-900 hover:bg-black text-white font-bold text-sm text-center rounded-xl transition-colors shadow-md relative z-10 flex items-center justify-center gap-2"
             >
-              View Full Details
+              Access Full Identity <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
         </div>

@@ -63,7 +63,7 @@ export default function DigitalPass({ name, state, district, memberId }: PassPro
         link.click();
       } catch (err) {
         console.error("Download failed:", err);
-        alert("Failed to download the pass.");
+        alert("Failed to download the Card.");
       } finally {
         setIsDownloading(false);
       }

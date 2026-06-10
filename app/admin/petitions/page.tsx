@@ -5,8 +5,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useUser } from "@/hooks/useUser";
-import { FileText, Plus, Rocket, Download, Target, FileSignature, CheckCircle2, ShieldAlert, X, TrendingUp, Loader2, Trash2, ExternalLink, Image as ImageIcon, Move, MousePointer2, ZoomIn, ZoomOut, Maximize, Settings2, ArrowLeft, ImagePlus, Users, Type, Palette, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { FileText, Plus, Rocket, Download, Target, FileSignature, CheckCircle2, ShieldAlert, X, TrendingUp, Loader2, Trash2, ExternalLink, Image as ImageIcon, Move, MousePointer2, ZoomIn, ZoomOut, Maximize, Settings2, ArrowLeft, ImagePlus, Users, Type, Palette, AlignLeft, AlignCenter, AlignRight, FileDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // ─── AVAILABLE GOOGLE FONTS ─────────────────────────────────────────────────
 const AVAILABLE_FONTS = [
@@ -157,6 +159,131 @@ export default function AdminPetitionsPage() {
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
     setTimeout(() => setToast({ message: "", type: null }), 5000);
+  };
+
+  // ─── UPDATED: EXPORT TO CSV FUNCTION (FIXED) ───────────────────────────────
+  const exportToCSV = () => {
+    if (signatures.length === 0) return showToast("No signatures to export.", "error");
+
+    const headers = ["Citizen Name", "Phone", "Email", "State", "District", "Signed At"];
+    const rows = signatures.map(sig => [
+      `"${(sig.name || '').replace(/"/g, '""')}"`,
+      `"${sig.phone || ''}"`,
+      `"${sig.email || 'N/A'}"`,
+      `"${(sig.state || '').replace(/"/g, '""')}"`,
+      `"${(sig.district || '').replace(/"/g, '""')}"`,
+      `"${sig.signedAt ? new Date(sig.signedAt.toDate()).toLocaleString() : ''}"`
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    // Added BOM (\uFEFF) so Excel opens UTF-8 properly without issues
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `DSA_Campaign_${selectedPetition?.title.substring(0, 20).replace(/\s+/g, '_')}_Ledger.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // ─── UPDATED: EXPORT TO PROFESSIONAL PDF (WITH LOGO) ───────────────────────
+  const exportToPDF = async () => {
+    if (signatures.length === 0) return showToast("No signatures to export.", "error");
+
+    showToast("Generating PDF Report...", "success"); // Feedback to user while image loads
+
+    const doc = new jsPDF();
+    const titleText = selectedPetition?.title || "Petition Signatures";
+    
+    // --- 1. PREMIUM HEADER BACKGROUND (Dark Navy) ---
+    doc.setFillColor(10, 25, 47); // #0A192F
+    doc.rect(0, 0, 210, 45, 'F'); // A4 Width is 210mm
+    
+    // --- 2. LEFT ACCENT STRIP (DSA Blue) ---
+    doc.setFillColor(0, 122, 255); // #007AFF
+    doc.rect(0, 0, 3, 45, 'F');
+
+    // --- 3. LOAD & DRAW LOGO WITH WHITE CIRCLE ---
+    try {
+      const logoImg = new Image();
+      logoImg.src = "/dsa-logo.png";
+      await new Promise((resolve) => {
+        logoImg.onload = resolve;
+        logoImg.onerror = resolve; // Continue even if logo fails
+      });
+
+      // Draw white circle behind logo (X, Y, Radius)
+      doc.setFillColor(255, 255, 255);
+      doc.circle(20, 15, 10, 'F'); 
+
+      // Add logo image inside the circle
+      doc.addImage(logoImg, 'PNG', 12, 7, 16, 16);
+    } catch (e) {
+      console.error("Failed to load logo for PDF", e);
+    }
+    
+    // --- 4. ORGANIZATION TITLE (Shifted Right) ---
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("DEMOCRATIC SOCIAL ALLIANCE", 35, 13);
+    
+    // --- 5. SUBTITLE (Shifted Right) ---
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(156, 163, 175); // Gray-400
+    doc.text("Official Campaign Ledger · High Command", 35, 19);
+    
+    // --- 6. YELLOW/GOLD DIVIDER LINE ---
+    doc.setDrawColor(251, 191, 36); // Amber-400
+    doc.setLineWidth(0.6);
+    doc.line(15, 27, 195, 27);
+    
+    // --- 7. REPORT DOCUMENT TITLE ---
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("OFFICIAL SIGNATURE REPORT", 15, 36);
+
+    // --- 9. META DETAILS (Below Header) ---
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(13);
+    doc.text(`Campaign: ${titleText}`, 15, 55);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(75, 85, 99);
+    doc.text(`Total Authenticated Signatures: ${selectedPetition?.signatureCount || 0}`, 15, 62);
+    doc.text(`Generated On: ${new Date().toLocaleString()}`, 15, 68);
+
+    // --- 10. DATA TABLE (autoTable) ---
+    const tableColumn = ["#", "Citizen Identity", "Contact", "Jurisdiction", "Timestamp"];
+    const tableRows: any[] = [];
+
+    signatures.forEach((sig, index) => {
+      const rowData = [
+        index + 1,
+        sig.name || "N/A",
+        sig.phone || "N/A",
+        `${sig.district || "N/A"}, ${sig.state || "N/A"}`,
+        sig.signedAt ? new Date(sig.signedAt.toDate()).toLocaleString() : "N/A"
+      ];
+      tableRows.push(rowData);
+    });
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 75,
+      styles: { fontSize: 9, cellPadding: 4, font: "helvetica" },
+      headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' }, // Matches Navy Header
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      margin: { top: 75 }
+    });
+
+    doc.save(`DSA_Report_${titleText.substring(0, 20).replace(/\s+/g, '_')}.pdf`);
   };
 
   // ─── TRACK PREVIEW PANEL WIDTH ────────────────────────────────────────────
@@ -1210,10 +1337,15 @@ export default function AdminPetitionsPage() {
                   <h3 className="text-xl font-black">{selectedPetition.title}</h3>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button className="flex items-center gap-2 px-4 py-2 bg-white/8 hover:bg-white/15 text-white rounded-xl text-xs font-bold transition-colors border border-white/8">
+                  {/* 🔥 NEW: EXPORT PDF BUTTON 🔥 */}
+                  <button onClick={exportToPDF} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#007AFF] to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl text-xs font-bold transition-colors shadow-lg">
+                    <FileDown className="w-3.5 h-3.5" /> Report PDF
+                  </button>
+                  {/* 🔥 NEW: EXPORT CSV BUTTON 🔥 */}
+                  <button onClick={exportToCSV} className="flex items-center gap-2 px-4 py-2 bg-white/8 hover:bg-white/15 text-white rounded-xl text-xs font-bold transition-colors border border-white/8">
                     <Download className="w-3.5 h-3.5" /> Export CSV
                   </button>
-                  <button onClick={() => setSelectedPetition(null)} className="p-1.5 hover:bg-white/8 rounded-lg transition-colors text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+                  <button onClick={() => setSelectedPetition(null)} className="p-1.5 hover:bg-white/8 rounded-lg transition-colors text-gray-400 hover:text-white ml-2"><X className="w-5 h-5" /></button>
                 </div>
               </div>
 

@@ -285,7 +285,7 @@ export default function JoinPage() {
               {/* Progress Header */}
               <div className="bg-gray-50/80 px-8 py-5 border-b border-gray-100 flex items-center justify-between">
                 <div>
-                  <h1 className="text-xl font-black text-gray-900 tracking-tight">Join Alliance</h1>
+                  <h1 className="text-xl font-black text-gray-900 tracking-tight">Become Member</h1>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Step {formStep} of 3</p>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -396,9 +396,9 @@ export default function JoinPage() {
                 {/* LOGIN SWITCH */}
                 <div className="mt-8 text-center">
                   <p className="text-xs font-semibold text-gray-500">
-                    Already have a pass?{" "}
+                    Already a Member?{" "}
                     <button onClick={() => { setStep("LOGIN_PHONE"); setErrorMsg(""); setPhone(""); setFormStep(1); }} className="font-bold text-[#007AFF] hover:underline uppercase tracking-wide">
-                      Login Securely
+                      Login Here
                     </button>
                   </p>
                 </div>
@@ -437,7 +437,7 @@ export default function JoinPage() {
                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100 shadow-sm">
                   <Lock className="w-8 h-8 text-gray-900" />
                 </div>
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Citizen HQ Login</h1>
+                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Member Login</h1>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Authorized Access Only</p>
               </div>
 
@@ -462,9 +462,9 @@ export default function JoinPage() {
 
               <div className="mt-8 text-center border-t border-gray-100 pt-6">
                 <p className="text-xs font-semibold text-gray-500">
-                  New to the alliance?{" "}
+                  New to Here?{" "}
                   <button onClick={() => { setStep("FORM"); setErrorMsg(""); setPhone(""); setFormStep(1); }} className="font-bold text-gray-900 hover:underline uppercase tracking-wide">
-                    Create your Pass
+                    Become a Member
                   </button>
                 </p>
               </div>
@@ -479,7 +479,7 @@ export default function JoinPage() {
               <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 text-[#34C759]">
                 <ShieldCheck className="w-8 h-8" />
               </div>
-              <h2 className="text-2xl font-black text-gray-900 mb-1">Access Gateway</h2>
+              <h2 className="text-2xl font-black text-gray-900 mb-1">Access Dashboard</h2>
               <p className="text-sm font-medium text-gray-500 mb-6">Enter OTP sent to +91 {phone}</p>
               
               {errorMsg && <p className="text-red-500 text-xs font-bold mb-4 bg-red-50 p-2 rounded-lg">{errorMsg}</p>}

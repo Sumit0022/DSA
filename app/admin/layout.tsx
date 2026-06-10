@@ -58,10 +58,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* DESKTOP SIDEBAR - LOCKED TO VIEWPORT */}
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 fixed inset-y-0 left-0 z-50">
         <div className="h-20 flex items-center px-6 border-b border-gray-100 shrink-0">
-          <div className="w-8 h-8 bg-[#007AFF] rounded-lg flex items-center justify-center mr-3 shadow-md">
-            <Sunrise className="text-white w-5 h-5" />
+          {/* 🔥 MODIFIED: DSA Logo & Admin Text (Desktop Sidebar) */}
+          <div className="w-9 h-9 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-sm mr-3">
+            <img src="/dsa-logo.png" alt="DSA Logo" className="w-6 h-6 object-contain" />
           </div>
-          <span className="font-black text-lg tracking-tight text-gray-900">DSA ADMIN</span>
+          <span className="font-black text-lg tracking-tight text-gray-900 uppercase">ADMIN</span>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
@@ -98,16 +99,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* TOP COMMAND BAR */}
         <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-gray-200 sticky top-0 z-30 flex items-center justify-between px-4 md:px-8">
           <div className="flex items-center md:hidden">
-            <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 text-gray-600 rounded-lg hover:bg-gray-100">
+            <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 text-gray-600 rounded-lg hover:bg-gray-100 mr-2">
               <Menu className="w-6 h-6" />
             </button>
-            <Sunrise className="text-[#007AFF] w-6 h-6 ml-2" />
+            {/* 🔥 MODIFIED: DSA Logo & Admin Text (Mobile Header) */}
+            <div className="w-8 h-8 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-sm mr-2">
+              <img src="/dsa-logo.png" alt="DSA Logo" className="w-5 h-5 object-contain" />
+            </div>
+            <span className="font-black text-gray-900 tracking-tight text-lg uppercase">ADMIN</span>
           </div>
 
           {/* FUNCTIONAL SEARCH PALETTE */}
           <form 
             onSubmit={handleGlobalSearch} 
-            className="hidden md:flex items-center bg-gray-100/80 hover:bg-gray-200/80 transition-colors px-4 py-2.5 rounded-full w-96 border border-transparent focus-within:border-[#007AFF]/30 focus-within:bg-white focus-within:shadow-sm"
+            className="hidden md:flex items-center bg-gray-100/80 hover:bg-gray-200/80 transition-colors px-4 py-2.5 rounded-full w-96 border border-transparent focus-within:border-[#007AFF]/30 focus-within:bg-white focus-within:shadow-sm ml-auto md:ml-0"
           >
             <Search className="w-4 h-4 text-gray-400 mr-2" />
             <input 
@@ -141,9 +146,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm" />
             <motion.aside initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} transition={{ type: "spring", bounce: 0, duration: 0.3 }} className="fixed inset-y-0 left-0 w-64 bg-white shadow-2xl z-50 flex flex-col md:hidden">
               <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100 shrink-0">
+                {/* 🔥 MODIFIED: DSA Logo & Admin Text (Mobile Drawer) */}
                 <div className="flex items-center">
-                  <Sunrise className="text-[#007AFF] w-6 h-6 mr-2" />
-                  <span className="font-black tracking-tight text-gray-900">DSA ADMIN</span>
+                  <div className="w-8 h-8 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-sm mr-2">
+                    <img src="/dsa-logo.png" alt="DSA Logo" className="w-5 h-5 object-contain" />
+                  </div>
+                  <span className="font-black tracking-tight text-gray-900 uppercase">ADMIN</span>
                 </div>
                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg">
                   <X className="w-5 h-5" />

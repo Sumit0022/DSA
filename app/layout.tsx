@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer"; // 🔥 Footer import kiya gaya hai
 
 // Poppins font configure kar rahe hain (Apple-like clean typography)
 const poppins = Poppins({ 
@@ -23,12 +24,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${poppins.variable} font-sans antialiased`}>
+      <body className={`${poppins.variable} font-sans antialiased flex flex-col min-h-screen`}>
         <Navbar />
         {/* Main content Navbar ke niche aayega */}
-        <main className="min-h-screen flex-1 flex flex-col">
+        <main className="flex-1 flex flex-col">
           {children}
         </main>
+        <Footer /> {/* 🔥 Global Footer yahan add kiya hai */}
       </body>
     </html>
   );

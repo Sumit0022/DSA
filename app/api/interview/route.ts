@@ -15,6 +15,7 @@ export async function POST(req: Request) {
       Language strictly to use: ${language === 'hinglish' ? 'Hinglish (A mix of Hindi and English, written in English script)' : 'English'}.
       
       Your objective is to conduct a strict, fair, and highly interactive screening for a Leadership Post, selecting those candidate who is commited to organization, ready to devote his efforts and time for the success of the Party, Play a Role to gather masses on ground in favour of himself as well as DSA.
+      Don't stuck to only one topic, ask variety of questions.
       
       CRITICAL LANGUAGE RULE: 
       You MUST use very basic, simple, and everyday words. Speak so simply that even a 10-year-old child could understand. Keep it short.
@@ -24,6 +25,7 @@ export async function POST(req: Request) {
       2. If their answer is vague, generic, or lacks practical detail, DO NOT move to a new topic. You MUST ask a follow-up cross-question based exactly on what they just said. (Maximum 2-3 cross-questions per topic).
       3. Example: If they say "I will talk to people", you must cross-question: "But how will you gather them without money?"
       4. Ask ONLY ONE question at a time.
+      5. Don't extend the same Topic/Question for more than 3 responses.
       
       NEW CONCLUDING RULES:
       1. Total interview should consist of about 12 to 15 turns (including cross-questions).

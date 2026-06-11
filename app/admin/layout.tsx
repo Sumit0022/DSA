@@ -4,7 +4,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, Mail, FileText, Settings, LogOut, Menu, X, Sunrise, Search, MessageSquare, Pyramid } from "lucide-react";
+import { LayoutDashboard, Users, Mail, FileText, Settings, LogOut, Menu, X, Sunrise, Search, MessageSquare, Briefcase } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IndianRupee } from "lucide-react";
 import { Activity } from "lucide-react";
@@ -13,10 +13,11 @@ import { Signature } from "lucide-react";
 import { CheckSquare } from "lucide-react";
 import { Newspaper } from "lucide-react";
 import { Images } from "lucide-react";
+import { Coins } from "lucide-react";
 
 const sidebarLinks = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { name: "Citizens Ledger", href: "/admin/members", icon: Users },
+  { name: "All Members", href: "/admin/members", icon: Users },
   { name: "Activity Radar", href: "/admin/activity", icon: Activity },
   { name: "Analytics", href: "/admin/analytics", icon: Brain },
   { name: "Voting", href: "/admin/voting", icon: CheckSquare },
@@ -26,7 +27,8 @@ const sidebarLinks = [
   { name: "Petitions", href: "/admin/petitions", icon: Signature },
   { name: "Publishing Hub", href: "/admin/blog", icon: FileText },
   { name: "Donations", href: "/admin/donations", icon: IndianRupee},
-  { name: "Leadership", href: "/admin/manage-leaders", icon: Pyramid },
+  { name: "Leadership", href: "/admin/manage-leaders", icon: Briefcase },
+  { name: "Reward Points", href: "/admin/leaderboard", icon: Coins },
   { name: "Screening Inbox", href: "/admin/applications", icon: MessageSquare },
   { name: "System Settings", href: "/admin/settings", icon: Settings },
 ];

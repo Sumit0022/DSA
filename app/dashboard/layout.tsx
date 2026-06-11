@@ -27,6 +27,9 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { userData, loadingUser } = useUser();
 
+  // ✅ Chat page par mobile header aur mt-16 hide karo
+  const isChatPage = pathname === "/dashboard/chat";
+
   useEffect(() => {
     if (isMobileMenuOpen) {
       document.body.style.overflow = 'hidden';
@@ -48,23 +51,24 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
   return (
     <div className="flex h-[100dvh] bg-gray-50 overflow-hidden font-sans">
       
-      {/* MOBILE HEADER */}
-      <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4 shadow-sm">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          {/* 🔥 MODIFIED: DSA Logo & Dashboard Text (Mobile Header) */}
-          <div className="w-8 h-8 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
-            <img src="/dsa-logo.png" alt="DSA Logo" className="w-5 h-5 object-contain" />
-          </div>
-          <span className="font-black text-gray-900 tracking-tight text-lg uppercase">DASHBOARD</span>
-        </Link>
-        
-        <button 
-          onClick={() => setIsMobileMenuOpen(true)} 
-          className="p-2 text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-        >
-          <Menu className="w-6 h-6" />
-        </button>
-      </div>
+      {/* MOBILE HEADER — chat page par hide */}
+      {!isChatPage && (
+        <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4 shadow-sm">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+              <img src="/dsa-logo.png" alt="DSA Logo" className="w-5 h-5 object-contain" />
+            </div>
+            <span className="font-black text-gray-900 tracking-tight text-lg uppercase">DASHBOARD</span>
+          </Link>
+          
+          <button 
+            onClick={() => setIsMobileMenuOpen(true)} 
+            className="p-2 text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+        </div>
+      )}
 
       {/* MOBILE BACKDROP OVERLAY */}
       <AnimatePresence>
@@ -79,7 +83,7 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
         )}
       </AnimatePresence>
 
-      {/* MOBILE SIDEBAR DRAWER — animated, only renders when open */}
+      {/* MOBILE SIDEBAR DRAWER */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div 
@@ -92,7 +96,6 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
             {/* Sidebar Header */}
             <div className="flex h-16 items-center justify-between gap-3 px-6 border-b border-gray-100 shrink-0">
               <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 cursor-pointer">
-                {/* 🔥 MODIFIED: DSA Logo & Dashboard Text (Mobile Drawer) */}
                 <div className="w-9 h-9 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
                   <img src="/dsa-logo.png" alt="DSA Logo" className="w-6 h-6 object-contain" />
                 </div>
@@ -122,16 +125,15 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
                 );
               })}
               {userData?.role && (
-            <Link 
-              href="/dashboard/workspace" 
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 rounded-xl font-black transition-all border border-[#007AFF]/20"
-            >
-              <ClipboardList className="w-5 h-5" />
-              Leader Workspace
-            </Link>
-          )}
-
+                <Link 
+                  href="/dashboard/workspace" 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 rounded-xl font-black transition-all border border-[#007AFF]/20"
+                >
+                  <ClipboardList className="w-5 h-5" />
+                  Leader Workspace
+                </Link>
+              )}
             </div>
 
             {/* User Area / Logout */}
@@ -152,12 +154,11 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
         )}
       </AnimatePresence>
 
-      {/* DESKTOP SIDEBAR — always visible, no animation, no window check */}
+      {/* DESKTOP SIDEBAR — always visible */}
       <div className="hidden md:flex w-64 h-[100dvh] bg-white border-r border-gray-200 flex-col shadow-none">
         {/* Sidebar Header */}
         <div className="flex h-20 items-center justify-between gap-3 px-6 border-b border-gray-100 shrink-0">
           <Link href="/dashboard" className="flex items-center gap-3 cursor-pointer">
-            {/* 🔥 MODIFIED: DSA Logo & Dashboard Text (Desktop Sidebar) */}
             <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
               <img src="/dsa-logo.png" alt="DSA Logo" className="w-7 h-7 object-contain" />
             </div>
@@ -183,15 +184,14 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
             );
           })}
           {userData?.role && (
-          <Link 
-            href="/dashboard/workspace" 
-            className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 rounded-xl font-black transition-all border border-[#007AFF]/20"
-          >
-            <ClipboardList className="w-5 h-5" />
-            Leader Workspace
-          </Link>
-        )}
-
+            <Link 
+              href="/dashboard/workspace" 
+              className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 rounded-xl font-black transition-all border border-[#007AFF]/20"
+            >
+              <ClipboardList className="w-5 h-5" />
+              Leader Workspace
+            </Link>
+          )}
         </div>
 
         {/* User Area / Logout */}
@@ -211,8 +211,9 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
       </div>
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 md:mt-0 mt-16 overflow-hidden">
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 relative">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* ✅ chat page par mt-16 nahi lagega, baaki sab par lagega */}
+        <main className={`flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 relative ${!isChatPage ? "md:mt-0 mt-16" : ""}`}>
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.02] pointer-events-none"></div>
           <div className="relative z-10 h-full">
             {children}

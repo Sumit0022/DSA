@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, ShieldCheck, XCircle, CheckCircle, Send, MessageSquare, MapPin, Paperclip, Info, Phone, Mail, Clock, User, Loader2, X, ArrowLeft, Crown, CalendarDays, Power, AlertTriangle, Star } from "lucide-react";
+import { Search, ShieldCheck, XCircle, CheckCircle, Send, MessageSquare, MapPin, Paperclip, Info, Phone, Mail, Clock, User, Loader2, X, ArrowLeft, Crown, CalendarDays, Power, AlertTriangle, Star, Bot } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, getDoc, where, addDoc, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -320,6 +320,7 @@ Their dedication to the organization's vision has warranted this command clearan
       setAssignLevel("District");
     }
     setAssignTerm(TERM_LENGTHS[1]);
+    setHierarchyData(null); // Pre-reset hierarchy data to force recalc
     setShowRoleModal(true);
   };
 
@@ -384,7 +385,7 @@ Their dedication to the organization's vision has warranted this command clearan
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-[var(--header-height,64px)])] md:h-[calc(100vh-120px)] bg-white border border-gray-200 rounded-none md:rounded-2xl shadow-sm overflow-hidden relative">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-[var(--header-height,64px)])] md:h-[calc(100vh-120px)] bg-white border border-gray-200 rounded-none md:rounded-2xl shadow-sm overflow-hidden relative overflow-hidden">
       
       {/* LEFT PANE */}
       <div className={`w-full md:w-1/3 border-r border-gray-200 flex flex-col bg-gray-50/50 absolute md:relative inset-0 z-10 transition-transform duration-300 ${showChatMobile ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
@@ -430,6 +431,7 @@ Their dedication to the organization's vision has warranted this command clearan
                 {app.status === "pending" && <span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold uppercase tracking-widest rounded-md">Pending Review</span>}
                 {app.status === "approved" && <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-widest rounded-md">Approved</span>}
                 {app.status === "rejected" && <span className="inline-block px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-widest rounded-md">Rejected</span>}
+                {app.status === "submitted" && <span className="inline-block px-2 py-0.5 bg-blue-100 text-[#007AFF] text-[10px] font-bold uppercase tracking-widest rounded-md flex items-center gap-1"><Bot className="w-3 h-3"/> AI Screened</span>}
               </div>
             ))
           )}
@@ -452,7 +454,8 @@ Their dedication to the organization's vision has warranted this command clearan
                 </div>
               </div>
               
-              {activeApp.status === "pending" && (
+              {/* Enable Reject/Approve for PENDING & AI SUBMITTED status */}
+              {(activeApp.status === "pending" || activeApp.status === "submitted") && (
                 <div className="flex gap-1 md:gap-2">
                   <button onClick={handleReject} className="px-2 md:px-4 py-1.5 md:py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1"><XCircle className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">Reject</span></button>
                   <button onClick={handleApproveInit} className="px-2 md:px-4 py-1.5 md:py-2 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1"><CheckCircle className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">Approve</span></button>
@@ -465,11 +468,28 @@ Their dedication to the organization's vision has warranted this command clearan
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 bg-[#efeae2]" style={{ backgroundImage: 'url("https://w0.peakpx.com/wallpaper/818/148/HD-wallpaper-whatsapp-background-solid-color-pattern.jpg")', backgroundSize: 'cover', backgroundBlendMode: 'soft-light' }}>
               {activeApp.messages?.length > 0 ? (
                 activeApp.messages.map((msg: any, index: number) => (
-                  <div key={msg.id || index} className={`flex ${msg.sender === "admin" ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[85%] md:max-w-[70%] rounded-2xl px-3 py-2 md:px-4 md:py-2 shadow-sm relative ${msg.sender === "admin" ? "bg-[#d9fdd3] rounded-tr-none text-gray-900" : "bg-white rounded-tl-none text-gray-900"}`}>
-                      <p className="text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                      <span className="text-[9px] md:text-[10px] text-gray-400 font-medium block text-right mt-1 md:mt-1.5">{msg.time}</span>
+                  <div key={msg.id || index} className={`flex ${msg.sender === "admin" || msg.sender === "ai" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[85%] md:max-w-[70%] rounded-2xl px-3 py-2 md:px-4 md:py-2 shadow-sm relative ${msg.sender === "admin" || msg.sender === "ai" ? "bg-[#d9fdd3] rounded-tr-none text-gray-900" : "bg-white rounded-tl-none text-gray-900"}`}>
+                      
+                      {/* AI Bot Identifier */}
+                      {msg.sender === "ai" && (
+                          <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1 flex items-center gap-1">
+                            <Bot className="w-3 h-3"/> DSA AI SCREENER
+                          </p>
+                      )}
+
+                      <p className="text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap font-medium">{msg.text}</p>
+                      <span className="text-[9px] md:text-[10px] text-gray-400 font-medium block text-right mt-1 md:mt-1.5 tracking-tighter">
+                        {msg.time} {msg.sender === "ai" && " (Automated)"}
+                      </span>
                     </div>
+                    
+                    {/* Message Status Icon for DSA Team */}
+                    {(msg.sender === "admin" || msg.sender === "ai") && (
+                        <div className="ml-1 self-end mb-1">
+                            <CheckCircle className="w-3 h-3 text-emerald-500"/>
+                        </div>
+                    )}
                   </div>
                 ))
               ) : (
@@ -480,10 +500,20 @@ Their dedication to the organization's vision has warranted this command clearan
 
             <div className="p-3 md:p-4 bg-gray-50 border-t border-gray-200 shrink-0">
               <form onSubmit={handleSendReply} className="flex gap-2 items-center">
-                <button type="button" onClick={handleAttachmentClick} disabled={activeApp.status !== "pending"} className="w-10 h-10 md:w-12 md:h-12 bg-white border border-gray-200 text-gray-500 rounded-xl flex items-center justify-center disabled:opacity-50 shrink-0"><Paperclip className="w-4 h-4 md:w-5 md:h-5" /></button>
+                <button type="button" onClick={handleAttachmentClick} disabled={activeApp.status !== "pending"} className="w-10 h-10 md:w-12 md:h-12 bg-white border border-gray-200 text-gray-500 rounded-xl flex items-center justify-center disabled:opacity-50 shrink-0"><Paperclip className="w-4 h-4 md:w-5 h-5" /></button>
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf,.doc,.docx" />
-                <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} disabled={activeApp.status !== "pending"} placeholder={activeApp.status === "pending" ? "Type reply..." : "Chat locked. Application is closed."} className="flex-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#007AFF] text-sm disabled:bg-gray-100 disabled:text-gray-400" />
-                <button type="submit" disabled={!chatInput.trim() || activeApp.status !== "pending"} className="w-10 h-10 md:w-12 md:h-12 bg-gray-900 text-white rounded-xl flex items-center justify-center disabled:opacity-50 shadow-sm shrink-0"><Send className="w-4 h-4 md:w-5 md:h-5 ml-1" /></button>
+                
+                {/* 🔴 FIXED SYNTAX ERROR HERE 🔴 */}
+                <input 
+                  type="text" 
+                  value={chatInput} 
+                  onChange={(e) => setChatInput(e.target.value)} 
+                  disabled={activeApp.status !== "pending"} 
+                  placeholder={activeApp.status === "pending" ? "Type reply..." : activeApp.status === "submitted" ? "🔒 Screening done. Use buttons above for final decision." : "🔒 Chat locked. Application is closed."} 
+                  className="flex-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#007AFF] text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:placeholder:text-gray-400 font-medium" 
+                />
+                
+                <button type="submit" disabled={!chatInput.trim() || activeApp.status !== "pending"} className="w-10 h-10 md:w-12 md:h-12 bg-gray-900 text-white rounded-xl flex items-center justify-center disabled:opacity-50 shadow-sm shrink-0"><Send className="w-4 h-4 md:w-5 h-5 ml-1" /></button>
               </form>
             </div>
           </>
@@ -504,7 +534,7 @@ Their dedication to the organization's vision has warranted this command clearan
                 </div>
                 <button onClick={() => setShowRoleModal(false)} className="p-1.5 md:p-2 text-gray-400 hover:bg-gray-200 rounded-full transition-colors"><X className="w-4 h-4 md:w-5 h-5" /></button>
               </div>
-              <form onSubmit={confirmApproval} className="p-4 md:p-6 space-y-4 md:space-y-5 overflow-y-auto flex-1">
+              <form onSubmit={confirmApproval} className="p-4 md:p-6 space-y-4 md:space-y-5 overflow-y-auto flex-1 scrollbar-thin">
                 <div className="space-y-3 md:space-y-4">
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Jurisdiction Level</label>
@@ -568,18 +598,18 @@ Their dedication to the organization's vision has warranted this command clearan
         {showProfile && activeApp && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowProfile(false)} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden" />
-            <motion.div initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }} className="fixed md:absolute top-0 right-0 h-full w-4/5 max-w-[320px] md:w-80 bg-white border-l border-gray-200 shadow-2xl z-50 flex flex-col">
-              <div className="p-4 md:p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+            <motion.div initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }} className="fixed md:absolute top-0 right-0 h-full w-4/5 max-w-[320px] md:w-80 bg-white border-l border-gray-200 shadow-2xl z-50 flex flex-col z-[101]">
+              <div className="p-4 md:p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 relative">
                 <h3 className="font-bold text-gray-900">Applicant Profile</h3>
                 <button onClick={() => setShowProfile(false)} className="p-1.5 md:p-2 hover:bg-gray-200 rounded-full transition-colors"><X className="w-5 h-5 text-gray-500" /></button>
               </div>
-              <div className="p-4 md:p-6 flex-1 overflow-y-auto space-y-6">
+              <div className="p-4 md:p-6 flex-1 overflow-y-auto space-y-6 scrollbar-thin">
                 <div className="text-center">
                   <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-tr from-[#007AFF] to-blue-400 text-white rounded-full flex items-center justify-center mx-auto shadow-md mb-3 md:mb-4 text-xl md:text-2xl font-black relative">
                     {activeApp.name.charAt(0)}
                     
-                    {/* 🔥 PHASE 4: FLOATING POINTS BADGE 🔥 */}
-                    <div className="absolute -bottom-2 right-[-10px] bg-amber-400 text-amber-950 text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-white shadow-sm flex items-center gap-0.5">
+                    {/* FLOATING POINTS BADGE */}
+                    <div className="absolute -bottom-2 right-[-10px] bg-amber-400 text-amber-950 text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-white shadow-sm flex items-center gap-0.5 z-10">
                       <Star className="w-2.5 h-2.5 fill-amber-950" /> {appUserData?.points || 0}
                     </div>
                   </div>
@@ -592,16 +622,19 @@ Their dedication to the organization's vision has warranted this command clearan
                 <div className="space-y-4 pt-4 border-t border-gray-100">
                   <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Contact Details</p>
-                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-[#007AFF]"/> {appUserData?.phone || activeApp.phone || "N/A"}</p>
-                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2 mt-2"><Mail className="w-3.5 h-3.5 text-[#007AFF]"/> {appUserData?.email || activeApp.email || "No Email Provided"}</p>
+                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-[#007AFF] shrink-0"/> <span className="truncate">{appUserData?.phone || activeApp.phone || "N/A"}</span></p>
+                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2 mt-2"><Mail className="w-3.5 h-3.5 text-[#007AFF] shrink-0"/> <span className="truncate">{appUserData?.email || activeApp.email || "No Email Provided"}</span></p>
                   </div>
                   <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Location Details</p>
-                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-[#007AFF]"/> {activeApp.district}, {activeApp.state}</p>
+                    <p className="text-sm font-semibold text-gray-800 flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-[#007AFF] shrink-0"/> {activeApp.district}, {activeApp.state}</p>
                   </div>
                   <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Target Post</p>
                     <p className="text-sm font-black text-[#007AFF]">{activeApp.requestedRole || "Not Specified"}</p>
+                    {activeApp.status === "submitted" && (
+                      <div className="mt-2 text-xs font-bold text-gray-500 bg-white p-2 rounded-lg border border-gray-100">AI Screening complete. Ready for final mandate decision.</div>
+                    )}
                   </div>
                 </div>
 

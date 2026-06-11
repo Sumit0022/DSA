@@ -33,7 +33,7 @@ export default function LocalLeadersPage() {
   const [applyLevel, setApplyLevel] = useState("District");
   const [applyTitle, setApplyTitle] = useState("");
 
-  // 🔥 NEW STATES FOR DYNAMIC HIERARCHY & VACANCY 🔥
+  // 🔥 STATES FOR DYNAMIC HIERARCHY & VACANCY 🔥
   const [hierarchyData, setHierarchyData] = useState<any>(null);
   const [vacancyData, setVacancyData] = useState<{title: string, maxLimit: number, filled: number, isAvailable: boolean}[]>([]);
 
@@ -73,9 +73,8 @@ export default function LocalLeadersPage() {
         
         querySnapshot.forEach((document) => {
           const data = document.data();
-          if (data.role === 'active_member') return; // Exclude ground cadre
+          if (data.role === 'active_member') return;
 
-          // Cross-check old 'role' string and new 'roleLevel' from Phase 2
           const leaderRole = (data.role || "").toLowerCase();
           const leaderLevel = (data.roleLevel || "").toLowerCase();
           
@@ -83,7 +82,6 @@ export default function LocalLeadersPage() {
           const isLdrState = leaderRole.includes("state") || leaderLevel === "state";
           const isLdrDistrict = leaderRole.includes("district") || leaderLevel === "district";
           
-          // 🔥 STRICT HIERARCHY ISOLATION LOGIC 🔥
           if (isNational) {
             if (isLdrNational) fetchedLeaders.push({ id: document.id, ...data });
           } 
@@ -134,7 +132,7 @@ export default function LocalLeadersPage() {
     return () => unsubscribeSettings();
   }, [userData?.id, userDistrict, userState]);
 
-  // 3. 🚀 SMART VACANCY CALCULATOR ENGINE 🚀
+  // 3. SMART VACANCY CALCULATOR ENGINE
   useEffect(() => {
     if (hierarchyData && hierarchyData[applyLevel]) {
       const tiers = hierarchyData[applyLevel];
@@ -143,7 +141,6 @@ export default function LocalLeadersPage() {
       tiers.forEach((tier: any) => {
         if (tier.titles) {
           tier.titles.forEach((t: any) => {
-            // Count how many people in my state/district actually hold this exact title
             const filledCount = leaders.filter((l: any) => {
               const levelMatch = l.roleLevel === applyLevel || (l.role || "").toLowerCase().includes(applyLevel.toLowerCase());
               const titleMatch = l.roleTitle === t.title || l.role === t.title;
@@ -162,7 +159,6 @@ export default function LocalLeadersPage() {
       });
       setVacancyData(computedVacancies);
       
-      // Auto-select the first AVAILABLE title
       const available = computedVacancies.filter(v => v.isAvailable);
       if (available.length > 0 && !available.find(v => v.title === applyTitle)) {
         setApplyTitle(available[0].title);
@@ -172,7 +168,7 @@ export default function LocalLeadersPage() {
     }
   }, [hierarchyData, applyLevel, leaders]);
 
-  // SYNC APPLICATION
+  // LIVE SYNC APPLICATION STATUS
   useEffect(() => {
     if (!currentUser) return;
     const q = query(collection(db, "applications"), where("userId", "==", currentUser.id));
@@ -189,6 +185,7 @@ export default function LocalLeadersPage() {
     setShowPostSelect(true); 
   };
 
+  // 🔥 UPDATED: Submit Application (Fixed for AI Chat) 🔥
   const submitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !applyTitle) return;
@@ -204,16 +201,10 @@ export default function LocalLeadersPage() {
         phone: currentUser.phone,
         district: userDistrict, 
         state: userState, 
-        status: "pending",
+        status: "under_interview", // Set directly to under_interview
         appliedAt: serverTimestamp(), 
         requestedRole: requestedRole,
-        messages: [
-          { 
-            id: 1, sender: "admin", 
-            text: `Welcome to the DSA Leadership Screening.\n\nWe see you are applying for the post of *${requestedRole}* for ${location}.\n\nRemember, this is not just a title; it's a strict operational responsibility. Why do you believe you are the right fit for this specific post? Please provide details of any past social work.`, 
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-          }
-        ]
+        messages: [] // Keep empty so AI Language Selector Triggers!
       });
       router.push("/dashboard/chat");
     } catch (error) {
@@ -325,26 +316,12 @@ export default function LocalLeadersPage() {
         </div>
       )}
 
-      {/* DYNAMIC APPLICATION CTA / APPOINTMENT VIEW (Only for members trying to apply) */}
+      {/* 🔥 DYNAMIC APPLICATION CTA / STATUS VIEW 🔥 */}
       {isNormalMember && (
         <div className="mt-8 bg-white border border-gray-200 rounded-2xl md:rounded-3xl p-6 md:p-8 text-center shadow-sm relative overflow-hidden">
           <div className="relative z-10">
             {(() => {
-              if (applicationStatus === "pending") {
-                return (
-                  <>
-                    <Award className="w-10 h-10 text-[#007AFF] mx-auto mb-4" />
-                    <h3 className="text-lg md:text-xl font-black text-gray-900">Application in Progress</h3>
-                    <p className="text-xs md:text-sm text-gray-500 mt-2 mb-6 max-w-lg mx-auto">
-                      Your screening interview is active. The High Command is reviewing your profile.
-                    </p>
-                    <button onClick={() => router.push("/dashboard/chat")} className="px-6 py-3 bg-[#007AFF] text-white font-bold rounded-xl text-xs hover:bg-blue-600 shadow-md flex items-center justify-center gap-2 mx-auto">
-                      <MessageSquare className="w-4 h-4" /> Go to Headquarters Chat
-                    </button>
-                  </>
-                );
-              }
-
+              // 1. REJECTED (90 Days Cooldown)
               if (applicationStatus === "rejected") {
                  return (
                   <>
@@ -360,6 +337,52 @@ export default function LocalLeadersPage() {
                 );
               }
 
+              // 2. APPROVED (Wait for reload or refresh)
+              if (applicationStatus === "approved") {
+                return (
+                  <>
+                     <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle2 className="w-6 h-6" /></div>
+                     <h3 className="text-lg md:text-xl font-black text-gray-900">Appointment Confirmed</h3>
+                     <p className="text-xs md:text-sm text-gray-500 mt-2 mb-6 max-w-lg mx-auto">
+                       You have been officially cleared by the High Command. Please refresh your dashboard to access your command tools.
+                     </p>
+                  </>
+                );
+              }
+
+              // 3. SUBMITTED / PENDING (Pending Review)
+              if (applicationStatus === "submitted" || applicationStatus === "pending") {
+                return (
+                  <>
+                    <div className="w-12 h-12 bg-blue-100 text-[#007AFF] rounded-full flex items-center justify-center mx-auto mb-4"><CheckSquare className="w-6 h-6" /></div>
+                    <h3 className="text-lg md:text-xl font-black text-gray-900">Screening Completed</h3>
+                    <p className="text-xs md:text-sm text-gray-500 mt-2 mb-6 max-w-lg mx-auto">
+                      Your AI interview transcript has been submitted. The High Command is currently reviewing your profile.
+                    </p>
+                    <button onClick={() => router.push("/dashboard/chat")} className="px-6 py-3 bg-blue-50 text-[#007AFF] font-bold rounded-xl text-xs border border-blue-200 hover:bg-blue-100 mx-auto flex items-center justify-center gap-2">
+                      <MessageSquare className="w-4 h-4"/> View Interview Transcript
+                    </button>
+                  </>
+                );
+              }
+
+              // 4. UNDER INTERVIEW (Ongoing Chat)
+              if (applicationStatus === "under_interview") {
+                return (
+                  <>
+                    <Award className="w-10 h-10 text-[#007AFF] mx-auto mb-4 animate-pulse" />
+                    <h3 className="text-lg md:text-xl font-black text-gray-900">Interview in Progress</h3>
+                    <p className="text-xs md:text-sm text-gray-500 mt-2 mb-6 max-w-lg mx-auto">
+                      Your screening session with the AI Recruiter is currently ongoing. Please complete your interview.
+                    </p>
+                    <button onClick={() => router.push("/dashboard/chat")} className="px-6 py-3 bg-[#007AFF] text-white font-bold rounded-xl text-xs hover:bg-blue-600 shadow-md flex items-center justify-center gap-2 mx-auto">
+                      <MessageSquare className="w-4 h-4" /> Resume Interview
+                    </button>
+                  </>
+                );
+              }
+
+              // 5. INTAKE CLOSED
               if (!isIntakeOpen) {
                 return (
                   <>
@@ -372,7 +395,7 @@ export default function LocalLeadersPage() {
                 );
               }
 
-              // 🔥 NEW LOGIC: MINIMUM 50 POINTS REQUIRED TO APPLY 🔥
+              // 6. LOCKED (Points < 50)
               if (userPoints < 50) {
                 const progress = Math.min((userPoints / 50) * 100, 100);
                 return (
@@ -404,7 +427,7 @@ export default function LocalLeadersPage() {
                 );
               }
 
-              // DEFAULT: User is eligible and intake is open
+              // 7. DEFAULT: READY TO APPLY
               return (
                 <>
                   <Award className="w-10 h-10 text-[#007AFF] mx-auto mb-4" />
@@ -485,7 +508,7 @@ export default function LocalLeadersPage() {
         )}
       </AnimatePresence>
 
-      {/* 2. POST SELECTION MODAL (Smart Gatekeeper Upgraded) */}
+      {/* 2. POST SELECTION MODAL (Smart Gatekeeper) */}
       <AnimatePresence>
         {showPostSelect && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">

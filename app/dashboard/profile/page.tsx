@@ -2,13 +2,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { User, MapPin, Mail, Phone, Camera, Save, Loader2, ShieldCheck, CheckCircle2, AlertTriangle, X } from "lucide-react";
+import { User, MapPin, Mail, Phone, Camera, Save, Loader2, ShieldCheck, CheckCircle2, AlertTriangle, X, Star, Crown, Award } from "lucide-react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useUser } from "@/hooks/useUser";
 import { motion, AnimatePresence } from "framer-motion";
 
-// CONSTANT FOR DROPDOWNS (Same as Admin)
+// CONSTANT FOR DROPDOWNS
 const indiaData: Record<string, string[]> = {
   "Andaman and Nicobar Islands": ["Nicobar", "North and Middle Andaman", "South Andaman"],
   "Andhra Pradesh": ["Anantapur", "Chittoor", "East Godavari", "Guntur", "Krishna", "Kurnool", "Prakasam", "Srikakulam", "Sri Potti Sriramulu Nellore", "Visakhapatnam", "Vizianagaram", "West Godavari", "YSR District, Kadapa (Nellore)"],
@@ -58,6 +58,12 @@ export default function CitizenProfile() {
   const [stateName, setStateName] = useState("");
   const [districtName, setDistrictName] = useState("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  
+  // 🔥 New Variables Extraction
+  const userPoints = userData?.points || 0;
+  const isLeader = userData?.role && userData?.role !== "member" && userData?.role !== "active_member";
+  const userRoleTitle = userData?.roleTitle || userData?.role?.replace(/_/g, " ");
+  const userRoleLevel = userData?.roleLevel || "";
 
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | null }>({ message: "", type: null });
@@ -114,7 +120,7 @@ export default function CitizenProfile() {
         district: districtName,
         profileImage: profileImage, // Save the base64 string
       });
-      showToast("Profile updated successfully. Digital pass refreshed.", "success");
+      showToast("Profile updated successfully. Information synced system-wide.", "success");
     } catch (error) {
       console.error("Error updating profile:", error);
       showToast("Failed to save profile. Try again.", "error");
@@ -172,7 +178,7 @@ export default function CitizenProfile() {
         {/* TOP BANNER */}
         <div className="h-32 md:h-40 bg-gray-900 w-full relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#007AFF]/20 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
-          {userData?.role && (
+          {isLeader && (
             <div className="absolute top-4 right-4 bg-amber-500/20 text-amber-400 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-amber-500/30 flex items-center gap-1.5 uppercase tracking-widest backdrop-blur-md">
               <ShieldCheck className="w-3.5 h-3.5" /> Official Leader
             </div>
@@ -184,7 +190,7 @@ export default function CitizenProfile() {
           {/* AVATAR UPLOAD SECTION */}
           <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start md:items-end -mt-16 md:-mt-20 mb-8 md:mb-12">
             <div className="relative group">
-              <div className="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full p-1.5 shadow-xl">
+              <div className="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full p-1.5 shadow-xl relative z-10">
                 <div className="w-full h-full bg-gray-100 rounded-full overflow-hidden flex items-center justify-center relative">
                   {profileImage ? (
                     <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
@@ -202,13 +208,26 @@ export default function CitizenProfile() {
                 </div>
               </div>
               <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+              
+              {/* 🔥 Floating Points Badge overlaying profile image 🔥 */}
+              <div className="absolute bottom-1 -right-2 md:right-0 bg-amber-400 text-amber-950 font-black text-sm px-3 py-1 rounded-full border-2 border-white shadow-lg flex items-center gap-1 z-20">
+                 <Star className="w-4 h-4 fill-amber-950" /> {userPoints}
+              </div>
             </div>
 
             <div className="flex-1 space-y-1">
-              <h2 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">{name || "Citizen"}</h2>
-              <p className="text-sm font-bold text-gray-500 flex items-center gap-1.5">
-                <MapPin className="w-4 h-4 text-[#007AFF]" /> {districtName || "District"}, {stateName || "State"}
-              </p>
+              <h2 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight capitalize">{name || "Citizen"}</h2>
+              
+              {/* 🔥 Dynamic Leadership Title Display 🔥 */}
+              {isLeader ? (
+                 <p className="text-sm font-black text-amber-600 flex items-center gap-1.5 mt-1 uppercase tracking-widest bg-amber-50 inline-block px-2 py-0.5 rounded border border-amber-100">
+                   <Crown className="w-4 h-4 text-amber-500" /> {userRoleTitle} ({userRoleLevel})
+                 </p>
+              ) : (
+                 <p className="text-sm font-bold text-gray-500 flex items-center gap-1.5">
+                   <MapPin className="w-4 h-4 text-[#007AFF]" /> {districtName || "District"}, {stateName || "State"}
+                 </p>
+              )}
             </div>
           </div>
 

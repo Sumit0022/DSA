@@ -2,9 +2,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, ShieldCheck, XCircle, CheckCircle, Send, MessageSquare, MapPin, Paperclip, Info, Phone, Mail, Clock, User, Loader2, X, ArrowLeft, Crown, CalendarDays, Power, AlertTriangle, Star, Bot } from "lucide-react";
+import { Search, ShieldCheck, XCircle, CheckCircle, Send, MessageSquare, MapPin, Paperclip, Info, Phone, Mail, Clock, User, Loader2, X, ArrowLeft, Crown, CalendarDays, Power, AlertTriangle, Star, Bot, Trash2, RefreshCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, getDoc, where, addDoc, getDocs } from "firebase/firestore";
+import { collection, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, getDoc, where, addDoc, getDocs, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 const TERM_LENGTHS = ["6 Months", "1 Year", "2 Years", "3 Years", "5 Years"];
@@ -310,6 +310,49 @@ Their dedication to the organization's vision has warranted this command clearan
     }
   };
 
+  // 🔴 DELETE ENTIRE APPLICATION LOGIC
+  const handleDeleteApplication = async () => {
+    if (!activeApp) return;
+    if (confirm("Are you absolutely sure you want to completely DELETE this application and its chat history? This cannot be undone.")) {
+      try {
+        await deleteDoc(doc(db, "applications", activeApp.id));
+        setSelectedAppId(null);
+        setShowChatMobile(false);
+      } catch (error) {
+        console.error("Failed to delete application", error);
+        alert("Failed to delete application.");
+      }
+    }
+  };
+
+  // 🟢 REVOKE COOLDOWN LOGIC
+  const handleRevokeCooldown = async () => {
+    if (!activeApp) return;
+    if (confirm("Revoke 90-day cooldown and allow candidate to resume screening?")) {
+      try {
+        const revokeMsg = {
+          id: Date.now(), sender: "admin", 
+          text: "✅ HIGH COMMAND UPDATE: Your cooldown period has been revoked by the administration. You may now continue your screening process.",
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: new Date().toISOString()
+        };
+        await updateDoc(doc(db, "applications", activeApp.id), { 
+          status: "pending",
+          messages: [...(activeApp.messages || []), revokeMsg]
+        });
+
+        await sendNotification(
+          activeApp.userId, 
+          "Cooldown Revoked", 
+          "Your application cooldown has been lifted. You can resume your screening chat.", 
+          "success"
+        );
+      } catch (error) {
+        console.error("Failed to revoke cooldown", error);
+      }
+    }
+  };
+
   // 🟢 APPROVE INIT (OPENS MODAL)
   const handleApproveInit = () => {
     if (!activeApp) return;
@@ -349,7 +392,7 @@ Their dedication to the organization's vision has warranted this command clearan
 
       const congratsMsg = {
         id: Date.now(), sender: "admin", 
-        text: `🎉 CONGRATULATIONS! The High Command has approved your application.\n\nYou are officially appointed as the ${combinedRoleDisplay} for ${location} for a term of ${assignTerm}. Please check your Local Leaders page to see your official Appointment Details. Your operational responsibilities begin immediately.`,
+        text: `🎉 CONGRATULATIONS! The High Command has approved your application.\n\nYou are officially appointed as the ${combinedRoleDisplay} for ${location} for a term of ${assignTerm}. Please check your View Leaders page to see your official Appointment Details. Your operational responsibilities begin immediately.`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: new Date().toISOString()
       };
@@ -454,15 +497,30 @@ Their dedication to the organization's vision has warranted this command clearan
                 </div>
               </div>
               
-              {/* Enable Reject/Approve for PENDING & AI SUBMITTED status */}
-              {(activeApp.status === "pending" || activeApp.status === "submitted") && (
-                <div className="flex gap-1 md:gap-2">
-                  <button onClick={handleReject} className="px-2 md:px-4 py-1.5 md:py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1"><XCircle className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">Reject</span></button>
-                  <button onClick={handleApproveInit} className="px-2 md:px-4 py-1.5 md:py-2 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1"><CheckCircle className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">Approve</span></button>
-                </div>
-              )}
-              {activeApp.status === "approved" && <span className="text-green-600 font-bold text-xs md:text-sm flex items-center gap-1"><CheckCircle className="w-3 h-3 md:w-4 md:h-4"/> Cleared</span>}
-              {activeApp.status === "rejected" && <span className="text-red-600 font-bold text-xs md:text-sm flex items-center gap-1"><XCircle className="w-3 h-3 md:w-4 md:h-4"/> Cooldown Active</span>}
+              <div className="flex items-center gap-1 md:gap-2">
+                {/* Enable Reject/Approve for PENDING & AI SUBMITTED status */}
+                {(activeApp.status === "pending" || activeApp.status === "submitted" || activeApp.status === "under_interview") && (
+                  <>
+                    <button onClick={handleReject} className="px-2 md:px-4 py-1.5 md:py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1"><XCircle className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">Reject</span></button>
+                    <button onClick={handleApproveInit} className="px-2 md:px-4 py-1.5 md:py-2 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1"><CheckCircle className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">Approve</span></button>
+                  </>
+                )}
+
+                {/* Revoke Cooldown Button for REJECTED status */}
+                {activeApp.status === "rejected" && (
+                  <button onClick={handleRevokeCooldown} className="px-2 md:px-4 py-1.5 md:py-2 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1">
+                    <RefreshCcw className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">Revoke Cooldown</span>
+                  </button>
+                )}
+                
+                {activeApp.status === "approved" && <span className="text-green-600 font-bold text-xs md:text-sm flex items-center gap-1 mr-2"><CheckCircle className="w-3 h-3 md:w-4 md:h-4"/> Cleared</span>}
+                
+                {/* Delete Entire Application Button */}
+                <button onClick={handleDeleteApplication} title="Delete Application Permanently" className="p-1.5 md:p-2 bg-red-50 text-red-500 hover:bg-red-100 rounded-lg transition-colors ml-1 md:ml-2">
+                  <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
+                </button>
+              </div>
+
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 bg-[#efeae2]" style={{ backgroundImage: 'url("https://w0.peakpx.com/wallpaper/818/148/HD-wallpaper-whatsapp-background-solid-color-pattern.jpg")', backgroundSize: 'cover', backgroundBlendMode: 'soft-light' }}>
@@ -500,20 +558,19 @@ Their dedication to the organization's vision has warranted this command clearan
 
             <div className="p-3 md:p-4 bg-gray-50 border-t border-gray-200 shrink-0">
               <form onSubmit={handleSendReply} className="flex gap-2 items-center">
-                <button type="button" onClick={handleAttachmentClick} disabled={activeApp.status !== "pending"} className="w-10 h-10 md:w-12 md:h-12 bg-white border border-gray-200 text-gray-500 rounded-xl flex items-center justify-center disabled:opacity-50 shrink-0"><Paperclip className="w-4 h-4 md:w-5 h-5" /></button>
+                <button type="button" onClick={handleAttachmentClick} disabled={activeApp.status === "rejected" || activeApp.status === "approved"} className="w-10 h-10 md:w-12 md:h-12 bg-white border border-gray-200 text-gray-500 rounded-xl flex items-center justify-center disabled:opacity-50 shrink-0"><Paperclip className="w-4 h-4 md:w-5 h-5" /></button>
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf,.doc,.docx" />
                 
-                {/* 🔴 FIXED SYNTAX ERROR HERE 🔴 */}
                 <input 
                   type="text" 
                   value={chatInput} 
                   onChange={(e) => setChatInput(e.target.value)} 
-                  disabled={activeApp.status !== "pending"} 
-                  placeholder={activeApp.status === "pending" ? "Type reply..." : activeApp.status === "submitted" ? "🔒 Screening done. Use buttons above for final decision." : "🔒 Chat locked. Application is closed."} 
+                  disabled={activeApp.status === "rejected" || activeApp.status === "approved"} 
+                  placeholder={activeApp.status === "rejected" || activeApp.status === "approved" ? "🔒 Chat locked. Application is closed." : "Type reply..."} 
                   className="flex-1 px-3 py-2.5 md:px-4 md:py-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#007AFF] text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:placeholder:text-gray-400 font-medium" 
                 />
                 
-                <button type="submit" disabled={!chatInput.trim() || activeApp.status !== "pending"} className="w-10 h-10 md:w-12 md:h-12 bg-gray-900 text-white rounded-xl flex items-center justify-center disabled:opacity-50 shadow-sm shrink-0"><Send className="w-4 h-4 md:w-5 h-5 ml-1" /></button>
+                <button type="submit" disabled={!chatInput.trim() || activeApp.status === "rejected" || activeApp.status === "approved"} className="w-10 h-10 md:w-12 md:h-12 bg-gray-900 text-white rounded-xl flex items-center justify-center disabled:opacity-50 shadow-sm shrink-0"><Send className="w-4 h-4 md:w-5 h-5 ml-1" /></button>
               </form>
             </div>
           </>

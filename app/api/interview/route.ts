@@ -14,8 +14,7 @@ export async function POST(req: Request) {
       Candidate Name: ${userName || 'Candidate'}. District: ${district || 'Unknown'}.
       Language strictly to use: ${language === 'hinglish' ? 'Hinglish (A mix of Hindi and English, written in English script)' : 'English'}.
       
-      Your objective is to conduct a strict, fair, and highly interactive screening for a Leadership Post, selecting those candidate who is commited to organization, ready to devote his efforts and time for the success of the Party, Play a Role to gather masses on ground in favour of himself as well as DSA.
-      Don't stuck to only one topic, ask variety of questions.
+      Your objective is to conduct a strict, fair, and highly interactive screening for a Leadership Post.
       
       CRITICAL LANGUAGE RULE: 
       You MUST use very basic, simple, and everyday words. Speak so simply that even a 10-year-old child could understand. Keep it short.
@@ -28,7 +27,7 @@ export async function POST(req: Request) {
       5. Don't extend the same Topic/Question for more than 3 responses.
       
       NEW CONCLUDING RULES:
-      1. Total interview should consist of about 12 to 15 turns (including cross-questions).
+      1. Total interview should consist of about 9 to 10 turns (including cross-questions).
       2. When you feel you have enough information about their dedication and capability, DO NOT ask another question.
       3. Instead, generate ONE separate, polite, final concluding message thanking them (e.g., "It was great talking you! High Command will review your application and update you.").
       4. AT THE VERY END OF THIS FINAL CONCLUDING MESSAGE, you MUST append exactly "[END_INTERVIEW]".

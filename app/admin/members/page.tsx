@@ -344,6 +344,11 @@ This decision is effective immediately, and all administrative access linked to 
     }
   };
 
+  // Helper to determine if someone is a leader
+  const isLeader = (member: Member) => {
+    return member.role && member.role !== 'active_member' && member.role !== 'member';
+  };
+
   return (
     <div className="space-y-6">
       
@@ -395,7 +400,7 @@ This decision is effective immediately, and all administrative access linked to 
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <p className="font-bold text-gray-900">{member.name}</p>
-                        {member.role && (
+                        {isLeader(member) && (
                           <span title="Alliance Leader">
                             <Crown className="w-4 h-4 text-amber-500" />
                           </span>
@@ -409,11 +414,12 @@ This decision is effective immediately, and all administrative access linked to 
                       {member.email && <p className="text-xs text-gray-500 mt-0.5">{member.email}</p>}
                     </td>
 
+                    {/* 🔥 FIXED REGION & POST COLUMN 🔥 */}
                     <td className="px-6 py-4">
                       <p className="text-sm font-semibold text-gray-900">{member.district}, {member.state}</p>
-                      {member.role ? (
+                      {isLeader(member) ? (
                         <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-1 bg-amber-50 inline-block px-2 py-0.5 rounded-sm border border-amber-100/50">
-                          {member.roleTitle || member.role} ({member.roleLocation})
+                          {member.roleTitle || member.role?.replace(/_/g, ' ')} ({member.roleLocation || member.roleLevel})
                         </p>
                       ) : (
                         <p className="text-xs text-gray-400 mt-0.5">Citizen</p>
@@ -566,7 +572,7 @@ This decision is effective immediately, and all administrative access linked to 
                 </div>
 
                 <div className="flex gap-3">
-                  {selectedMemberForRole.role && (
+                  {isLeader(selectedMemberForRole) && (
                     <button 
                       type="button"
                       onClick={handleRemoveRole}

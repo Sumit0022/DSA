@@ -45,7 +45,7 @@ export default function Footer() {
           <ul className="space-y-4 text-sm font-bold text-slate-500">
             {!userData && <li><Link href="/join" className="hover:text-[#007AFF] transition-colors">Join Movement</Link></li>}
             {!userData && <li><Link href="/login" className="hover:text-[#007AFF] transition-colors">Member Login</Link></li>}
-            {userData && <li><Link href={userData.roleLevel ? "/leader/workspace" : "/member/dashboard"} className="hover:text-[#007AFF] transition-colors">Go to Dashboard</Link></li>}
+            {userData && <li><Link href={userData.roleLevel ? "/dashboard" : "/dashboard"} className="hover:text-[#007AFF] transition-colors">Go to Dashboard</Link></li>}
           </ul>
         </div>
 

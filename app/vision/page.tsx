@@ -1,14 +1,21 @@
 // app/vision/page.tsx
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  BookOpen, HeartPulse, TrendingUp, Scale, Tractor, 
-  UserPlus, Users, Building2, Leaf, ShieldCheck, 
-  Cpu, Gavel, Globe2, Landmark, HardHat, 
-  Palette, Beaker, Lock, Home, ScrollText, 
-  Sparkles, CheckCircle2, ArrowRight
+import { useState, useRef } from "react";
+import {
+  motion,
+  AnimatePresence,
+  useScroll,
+  useSpring,
+  useReducedMotion,
+} from "framer-motion";
+import {
+  BookOpen, HeartPulse, TrendingUp, Scale, Tractor,
+  UserPlus, Users, Building2, Leaf, ShieldCheck,
+  Cpu, Gavel, Globe2, Landmark, HardHat,
+  Palette, Beaker, Lock, Home, ScrollText,
+  ChevronLeft, ChevronRight, Menu, X,
+  PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 
 // ─── MASSIVE DATA PAYLOAD ───
@@ -570,159 +577,490 @@ const manifestoData = [
   }
 ];
 
+// ─── HELPERS ───
+const toRoman = (num: number): string => {
+  const map: [number, string][] = [
+    [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"],
+    [100, "C"], [90, "XC"], [50, "L"], [40, "XL"],
+    [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
+  ];
+  let n = num;
+  let out = "";
+  for (const [value, symbol] of map) {
+    while (n >= value) {
+      out += symbol;
+      n -= value;
+    }
+  }
+  return out;
+};
+
+// ─── SEAL (signature element) ───
+// A stamped, document-style emblem reused across the hero and every
+// chapter heading — ties the whole reader back to the idea of a
+// formally registered "governing document".
+function Seal({
+  icon: Icon,
+  className = "",
+  ticks = false,
+}: {
+  icon: React.ElementType;
+  className?: string;
+  ticks?: boolean;
+}) {
+  const tickMarks = ticks
+    ? Array.from({ length: 28 }).map((_, i) => {
+        const angle = (i / 28) * Math.PI * 2;
+        const r1 = 45;
+        const r2 = i % 2 === 0 ? 40 : 42;
+        return (
+          <line
+            key={i}
+            x1={50 + Math.cos(angle) * r1}
+            y1={50 + Math.sin(angle) * r1}
+            x2={50 + Math.cos(angle) * r2}
+            y2={50 + Math.sin(angle) * r2}
+            stroke="currentColor"
+            strokeWidth="1"
+            opacity="0.4"
+          />
+        );
+      })
+    : null;
+return (
+    <div className={`relative grid place-items-center ${className}`}>
+      <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" fill="none">
+        <circle cx="50" cy="50" r="47" stroke="currentColor" strokeWidth="1" opacity="0.3" />
+        <circle cx="50" cy="50" r="38" stroke="currentColor" strokeWidth="1" strokeDasharray="1.5 4" opacity="0.55" />
+        {tickMarks}
+      </svg>
+      <Icon className="h-[36%] w-[36%]" strokeWidth={1.6} />
+    </div>
+  );
+}
+
 export default function VisionPage() {
   const [activeTab, setActiveTab] = useState(manifestoData[0].id);
+  const [focusMode, setFocusMode] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Smooth scroll reference to top of content when tab changes (mobile)
   const contentRef = useRef<HTMLDivElement>(null);
+  const prefersReducedMotion = useReducedMotion();
+
+  const { scrollYProgress } = useScroll();
+  const progress = useSpring(scrollYProgress, { stiffness: 200, damping: 30, restDelta: 0.001 });
+
+  const activeIndex = manifestoData.findIndex((m) => m.id === activeTab);
+  const activeContent = manifestoData[activeIndex];
+  const total = manifestoData.length;
+  const prevItem = activeIndex > 0 ? manifestoData[activeIndex - 1] : null;
+  const nextItem = activeIndex < total - 1 ? manifestoData[activeIndex + 1] : null;
 
   const handleTabChange = (id: string) => {
     setActiveTab(id);
-    if (window.innerWidth < 768) {
-       contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
-  const activeContent = manifestoData.find(m => m.id === activeTab);
+  const transition = (delay = 0) =>
+    prefersReducedMotion
+      ? { duration: 0 }
+      : { duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] as const };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      
-      {/* ─── HERO SECTION ─── */}
-      <header className="bg-white border-b border-slate-200 py-16 md:py-24 text-center px-6 relative overflow-hidden">
-         <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
-         
-         <div className="max-w-4xl mx-auto relative z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 mb-6">
-              <Sparkles className="w-4 h-4 text-blue-600" />
-              <span className="text-[10px] font-bold tracking-widest uppercase text-blue-700">The Official Document</span>
-            </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tight leading-tight mb-4 text-slate-900">
-               A New Vision for India
-            </h1>
-            <p className="text-lg md:text-xl text-slate-500 font-medium max-w-2xl mx-auto">
-               The ideological foundation, strategic priorities, and complete manifesto of the Democratic Social Alliance.
-            </p>
-         </div>
+    <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
+      {/* Reading progress */}
+      <motion.div
+        style={{ scaleX: progress }}
+        className="fixed top-0 left-0 right-0 z-50 h-[3px] origin-left bg-[var(--gold)]"
+      />
+
+      {/* ─── HERO ─── */}
+      <header className="relative overflow-hidden border-b border-[var(--rule)] px-6 py-20 md:py-28">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.05]"
+          style={{
+            backgroundImage: "radial-gradient(var(--ink) 0.5px, transparent 0.5px)",
+            backgroundSize: "20px 20px",
+          }}
+        />
+        <div className="relative z-10 mx-auto flex max-w-4xl flex-col items-center text-center">
+          <motion.div
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.85, rotate: -8 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            transition={transition()}
+          >
+            <Seal icon={ScrollText} ticks className="mb-6 h-20 w-20 text-[var(--gold)] md:h-24 md:w-24" />
+          </motion.div>
+
+          <motion.div
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={transition(0.1)}
+            className="mb-5 flex items-center gap-3"
+          >
+            <span className="h-px w-8 bg-[var(--gold)]/40 sm:w-12" />
+            <span className="eyebrow text-[var(--gold)]">Governing Document · 2026 Edition</span>
+            <span className="h-px w-8 bg-[var(--gold)]/40 sm:w-12" />
+          </motion.div>
+
+          <motion.h1
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={transition(0.2)}
+            className="font-display text-5xl font-black leading-[1.05] tracking-tight text-[var(--ink)] sm:text-6xl md:text-7xl"
+          >
+            A New Vision
+            <br />
+            for <span className="italic text-[var(--gold)]">India</span>
+          </motion.h1>
+
+          <motion.p
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={transition(0.3)}
+            className="font-read mt-6 max-w-2xl text-lg leading-relaxed text-[var(--ink-soft)] md:text-xl"
+          >
+            The ideological foundation, strategic priorities, and complete manifesto of the
+            Democratic Social Alliance.
+          </motion.p>
+
+          <motion.div
+            initial={prefersReducedMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={transition(0.45)}
+            className="mt-10 flex flex-wrap items-center justify-center gap-3 text-[var(--ink-soft)]"
+          >
+            <span className="eyebrow">{toRoman(total)} Articles</span>
+            <span className="h-1 w-1 rounded-full bg-[var(--gold)]" />
+            <span className="eyebrow">Constitution-grounded</span>
+            <span className="h-1 w-1 rounded-full bg-[var(--gold)]" />
+            <span className="eyebrow">For Every Citizen</span>
+          </motion.div>
+        </div>
       </header>
 
       {/* ─── READER LAYOUT ─── */}
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 md:py-12 flex flex-col md:flex-row gap-8 lg:gap-12 relative items-start">
-         
-         {/* LEFT SIDEBAR (Desktop) / TOP HORIZONTAL BAR (Mobile) */}
-         <div className="w-full md:w-1/3 lg:w-1/4 shrink-0 md:sticky md:top-24 z-20 bg-slate-50 md:bg-transparent">
-            {/* Mobile Scrollable Row */}
-            <div className="flex md:hidden overflow-x-auto hide-scrollbar gap-2 pb-4 snap-x">
-               {manifestoData.map((item) => (
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 md:px-8 md:py-14 lg:flex-row lg:items-start lg:gap-12">
+
+        {/* DESKTOP SIDEBAR — "The Index" */}
+        <motion.aside
+          animate={{ width: focusMode ? 76 : 280 }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          className="sticky top-8 hidden shrink-0 self-start lg:block"
+        >
+          <div className="rounded-[28px] border border-[var(--rule)] bg-white/70 p-3 backdrop-blur-sm">
+            <div className="mb-2 flex items-center justify-between px-2 py-2">
+              {!focusMode && <span className="eyebrow text-[var(--gold)]">The Index</span>}
+              <button
+                onClick={() => setFocusMode((f) => !f)}
+                aria-label={focusMode ? "Show index" : "Enter focus mode"}
+                className="ml-auto rounded-lg p-1.5 text-[var(--ink-soft)] transition-colors hover:bg-[var(--paper-deep)] hover:text-[var(--ink)]"
+              >
+                {focusMode ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </button>
+            </div>
+            <nav className="hide-scrollbar flex max-h-[calc(100vh-180px)] flex-col gap-1 overflow-y-auto">
+              {manifestoData.map((item, i) => {
+                const active = item.id === activeTab;
+                return (
                   <button
                     key={item.id}
                     onClick={() => handleTabChange(item.id)}
-                    className={`snap-start shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold transition-all border ${
-                      activeTab === item.id 
-                        ? "bg-blue-600 text-white border-blue-600 shadow-md" 
-                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                    title={item.title}
+                    className={`group relative flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors ${
+                      active
+                        ? "bg-[var(--gold-soft)] text-[var(--ink)]"
+                        : "text-[var(--ink-soft)] hover:bg-[var(--paper-deep)] hover:text-[var(--ink)]"
                     }`}
                   >
-                    <item.icon className="w-4 h-4" /> {item.title}
+                    {active && (
+                      <motion.span
+                        layoutId="active-rail"
+                        transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                        className="absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-full bg-[var(--gold)]"
+                      />
+                    )}
+                    <span className="font-display w-7 shrink-0 text-right text-[13px] font-semibold text-[var(--gold)]/80">
+                      {toRoman(i + 1)}
+                    </span>
+                    {!focusMode && (
+                      <span className="truncate text-[13px] font-semibold">{item.title}</span>
+                    )}
                   </button>
-               ))}
+                );
+              })}
+            </nav>
+          </div>
+        </motion.aside>
+
+        {/* CONTENT */}
+        <div ref={contentRef} className="min-w-0 flex-1 scroll-mt-20">
+          <div className="mx-auto w-full max-w-[760px]">
+
+            {/* Utility row */}
+            <div className="mb-4 flex items-center justify-between px-1">
+              <span className="eyebrow text-[var(--ink-soft)]">
+                Article {toRoman(activeIndex + 1)} of {toRoman(total)}
+              </span>
+              <button
+                onClick={() => setFocusMode((f) => !f)}
+                className="hidden items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--ink-soft)] transition-colors hover:text-[var(--ink)] lg:inline-flex"
+              >
+                {focusMode ? (
+                  <>
+                    <PanelLeftOpen className="h-3.5 w-3.5" /> Show index
+                  </>
+                ) : (
+                  <>
+                    <PanelLeftClose className="h-3.5 w-3.5" /> Focus mode
+                  </>
+                )}
+              </button>
             </div>
 
-            {/* Desktop Vertical List */}
-            <div className="hidden md:flex flex-col gap-1 pr-4 max-h-[calc(100vh-140px)] overflow-y-auto hide-scrollbar">
-               <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 px-3">Table of Contents</h3>
-               {manifestoData.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handleTabChange(item.id)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all text-left group ${
-                      activeTab === item.id 
-                        ? "bg-white text-blue-700 shadow-sm border border-slate-200" 
-                        : "text-slate-500 hover:bg-slate-200/50 hover:text-slate-800 border border-transparent"
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                       activeTab === item.id ? "bg-blue-100 text-blue-600" : "bg-white border border-slate-200 text-slate-400 group-hover:text-slate-600"
-                    }`}>
-                      <item.icon className="w-4 h-4" />
-                    </div>
-                    {item.title}
-                  </button>
-               ))}
-            </div>
-         </div>
-
-         {/* RIGHT CONTENT AREA */}
-         <div ref={contentRef} className="w-full md:w-2/3 lg:w-3/4 scroll-mt-24">
             <AnimatePresence mode="wait">
-               {activeContent && (
-                  <motion.article
-                     key={activeContent.id}
-                     initial={{ opacity: 0, y: 15 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     exit={{ opacity: 0, y: -15 }}
-                     transition={{ duration: 0.3, ease: "easeInOut" }}
-                     className="bg-white border border-slate-200 rounded-[2rem] shadow-sm p-6 sm:p-10 md:p-14"
-                  >
-                     {/* Article Header */}
-                     <header className="mb-10 md:mb-14 border-b border-slate-100 pb-8">
-                        <div className="w-14 h-14 bg-slate-50 border border-slate-200 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
-                           <activeContent.icon className="w-7 h-7" />
-                        </div>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight mb-4">
-                           {activeContent.title}
-                        </h2>
-                        {activeContent.subtitle && (
-                           <p className="text-lg md:text-xl text-slate-500 font-medium leading-relaxed">
-                              {activeContent.subtitle}
-                           </p>
-                        )}
-                     </header>
+              {activeContent && (
+                <motion.article
+                  key={activeContent.id}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={prefersReducedMotion ? undefined : { opacity: 0, y: -10 }}
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className="rounded-[32px] border border-[var(--rule)] bg-[var(--card)] p-6 shadow-[0_1px_3px_rgba(30,39,48,0.04)] sm:p-10 md:p-14"
+                >
+                  {/* Header */}
+                  <header className="mb-10 flex items-start gap-5 md:mb-14">
+                    <motion.div
+                      initial={prefersReducedMotion ? false : { opacity: 0, rotate: -10, scale: 0.85 }}
+                      animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                      transition={{ duration: 0.4, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <Seal icon={activeContent.icon} className="h-14 w-14 shrink-0 text-[var(--gold)] md:h-16 md:w-16" />
+                    </motion.div>
+                    <div className="min-w-0">
+                      <h2 className="font-display text-3xl font-black leading-[1.08] tracking-tight text-[var(--ink)] md:text-4xl lg:text-5xl">
+                        {activeContent.title}
+                      </h2>
+                      {activeContent.subtitle && (
+                        <p className="font-read mt-3 text-base italic leading-relaxed text-[var(--ink-soft)] md:text-lg">
+                          {activeContent.subtitle}
+                        </p>
+                      )}
+                    </div>
+                  </header>
 
-                     {/* Article Body (Serif for Readability) */}
-                     <div className="prose prose-slate prose-lg md:prose-xl max-w-none font-serif text-slate-700 leading-[1.8]">
-                        {activeContent.content.map((paragraph, idx) => (
-                           <p key={idx} className="mb-6">
-                              {paragraph}
-                           </p>
+                  {/* Body */}
+                  <div className="font-read space-y-6 text-[17px] leading-[1.85] text-[var(--ink-body)] md:text-[18px]">
+                    {activeContent.content.map((paragraph, idx) => (
+                      <motion.p
+                        key={idx}
+                        initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "-80px" }}
+                        transition={{ duration: 0.5, delay: Math.min(idx, 3) * 0.05 }}
+                        className={
+                          idx === 0
+                            ? "first-letter:font-display first-letter:float-left first-letter:mr-3 first-letter:mt-1 first-letter:text-[3.4rem] first-letter:font-bold first-letter:leading-[0.8] first-letter:text-[var(--gold)] md:first-letter:text-[4rem]"
+                            : ""
+                        }
+                      >
+                        {paragraph}
+                      </motion.p>
+                    ))}
+                  </div>
+
+                  {/* Priorities */}
+                  {activeContent.bullets.length > 0 && (
+                    <div className="mt-12 rounded-[28px] border border-[var(--rule)] bg-[var(--paper-deep)]/60 p-6 md:mt-16 md:p-10">
+                      <div className="mb-6 flex items-center gap-3">
+                        <span className="h-px flex-1 bg-[var(--rule)]" />
+                        <h3 className="eyebrow text-[var(--gold)]">Priorities for Action</h3>
+                        <span className="h-px flex-1 bg-[var(--rule)]" />
+                      </div>
+                      <ol className="space-y-4">
+                        {activeContent.bullets.map((bullet, idx) => (
+                          <motion.li
+                            key={idx}
+                            initial={prefersReducedMotion ? false : { opacity: 0, x: -12 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true, margin: "-60px" }}
+                            transition={{ duration: 0.4, delay: Math.min(idx, 6) * 0.04 }}
+                            className="flex items-start gap-4"
+                          >
+                            <span className="font-display w-8 shrink-0 text-right text-sm font-bold text-[var(--gold)]">
+                              {String(idx + 1).padStart(2, "0")}
+                            </span>
+                            <p className="m-0 text-[15px] font-medium leading-relaxed text-[var(--ink)]/85 md:text-base">
+                              {bullet}
+                            </p>
+                          </motion.li>
                         ))}
-                     </div>
+                      </ol>
+                    </div>
+                  )}
 
-                     {/* Strategic Priorities Box */}
-                     {activeContent.bullets.length > 0 && (
-                        <div className="mt-12 md:mt-16 bg-slate-50 border border-slate-200 rounded-3xl p-6 md:p-10">
-                           <h3 className="text-lg md:text-xl font-black text-slate-900 mb-6 flex items-center gap-2 font-sans tracking-tight">
-                              <CheckCircle2 className="w-6 h-6 text-blue-500" /> Key Strategic Priorities
-                           </h3>
-                           <ul className="space-y-5 font-sans">
-                              {activeContent.bullets.map((bullet, idx) => (
-                                 <li key={idx} className="flex items-start gap-4">
-                                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 mt-0.5 border border-blue-200 font-bold text-[10px]">
-                                       {idx + 1}
-                                    </div>
-                                    <p className="text-slate-700 font-medium leading-relaxed m-0 text-base md:text-lg">
-                                       {bullet}
-                                    </p>
-                                 </li>
-                              ))}
-                           </ul>
-                        </div>
-                     )}
-                     
-                     {/* Mobile Next Section Hint */}
-                     <div className="mt-12 pt-8 border-t border-slate-100 md:hidden flex justify-between items-center text-sm font-bold text-slate-400">
-                        <span>End of section</span>
-                        <span className="flex items-center gap-1">Scroll tabs for more <ArrowRight className="w-4 h-4"/></span>
-                     </div>
-                  </motion.article>
-               )}
+                  {/* Prev / Next */}
+                  <div className="mt-12 grid grid-cols-2 gap-4 border-t border-[var(--rule)] pt-8 md:mt-16">
+                    {prevItem ? (
+                      <button
+                        onClick={() => handleTabChange(prevItem.id)}
+                        className="group flex flex-col items-start gap-1 rounded-2xl p-3 text-left transition-colors hover:bg-[var(--paper-deep)]"
+                      >
+                        <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--ink-soft)]">
+                          <ChevronLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
+                          Previous
+                        </span>
+                        <span className="font-display text-base font-bold text-[var(--ink)] md:text-lg">
+                          {prevItem.title}
+                        </span>
+                      </button>
+                    ) : (
+                      <div />
+                    )}
+                    {nextItem ? (
+                      <button
+                        onClick={() => handleTabChange(nextItem.id)}
+                        className="group flex flex-col items-end gap-1 rounded-2xl p-3 text-right transition-colors hover:bg-[var(--paper-deep)]"
+                      >
+                        <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--ink-soft)]">
+                          Next
+                          <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                        </span>
+                        <span className="font-display text-base font-bold text-[var(--ink)] md:text-lg">
+                          {nextItem.title}
+                        </span>
+                      </button>
+                    ) : (
+                      <div />
+                    )}
+                  </div>
+                </motion.article>
+              )}
             </AnimatePresence>
-         </div>
+          </div>
+        </div>
       </div>
 
+      {/* MOBILE — floating contents button */}
+      <button
+        onClick={() => setDrawerOpen(true)}
+        className="fixed bottom-5 right-5 z-30 flex items-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3 font-sans text-sm font-bold text-[var(--paper)] shadow-lg shadow-black/20 lg:hidden"
+      >
+        <Menu className="h-4 w-4" />
+        <span className="font-display">{toRoman(activeIndex + 1)}</span>
+        <span className="opacity-40">/</span>
+        <span className="font-display">{toRoman(total)}</span>
+      </button>
+
+      {/* MOBILE — bottom sheet index */}
+      <AnimatePresence>
+        {drawerOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDrawerOpen(false)}
+              className="fixed inset-0 z-40 bg-[var(--ink)]/40 lg:hidden"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 320 }}
+              className="fixed bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto rounded-t-[32px] border-t border-[var(--rule)] bg-[var(--paper)] p-5 pb-8 lg:hidden"
+            >
+              <div className="mb-1 flex items-center justify-between">
+                <span className="eyebrow text-[var(--gold)]">Contents</span>
+                <button
+                  onClick={() => setDrawerOpen(false)}
+                  aria-label="Close"
+                  className="rounded-full p-1.5 text-[var(--ink-soft)] hover:bg-[var(--paper-deep)]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {manifestoData.map((item, i) => {
+                  const active = item.id === activeTab;
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        handleTabChange(item.id);
+                        setDrawerOpen(false);
+                      }}
+                      className={`flex flex-col gap-2 rounded-2xl border p-4 text-left transition-colors ${
+                        active
+                          ? "border-[var(--gold)] bg-[var(--gold-soft)]"
+                          : "border-[var(--rule)] bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-display text-xs font-bold text-[var(--gold)]">
+                          {toRoman(i + 1)}
+                        </span>
+                        <Icon className="h-4 w-4 text-[var(--ink-soft)]" />
+                      </div>
+                      <span className="font-sans text-sm font-bold leading-tight text-[var(--ink)]">
+                        {item.title}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <style jsx global>{`
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..900&family=Source+Serif+4:opsz,wght@8..60,400;500;600&family=Inter:wght@400;500;600;700;800&display=swap");
+
+        :root {
+          --paper: #f6f3ec;
+          --paper-deep: #efe9dc;
+          --card: #fffefb;
+          --ink: #1e2730;
+          --ink-soft: #6b7585;
+          --ink-body: #3c4651;
+          --gold: #b8863a;
+          --gold-soft: #f1e4c8;
+          --rule: #e2dcce;
+        }
+
+        .font-display {
+          font-family: "Fraunces", Georgia, serif;
+        }
+        .font-read {
+          font-family: "Source Serif 4", Georgia, serif;
+        }
+        .eyebrow {
+          font-family: "Inter", sans-serif;
+          font-size: 0.7rem;
+          font-weight: 800;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .hide-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            animation-duration: 0.01ms !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+          }
+        }
       `}</style>
     </div>
   );

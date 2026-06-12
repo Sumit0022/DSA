@@ -76,8 +76,8 @@ export default function ManageEventsPage() {
         date: doc.data().date?.toDate() || new Date()
       }));
       // Filter events by the leader
-      const myEvents = eventsData.filter(e => e.organizerId === userData.id);
-      myEvents.sort((a, b) => b.date.getTime() - a.date.getTime()); // Latest first
+      const myEvents = eventsData.filter((e: any) => e.organizerId === userData.id);
+      myEvents.sort((a: any, b: any) => b.date.getTime() - a.date.getTime()); // Latest first
       setEvents(myEvents);
       setLoading(false);
     });

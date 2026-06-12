@@ -18,6 +18,9 @@ export default function CitizenDashboard() {
   // 🚀 UPCOMING MEETINGS STATE 🚀
   const [upcomingMeets, setUpcomingMeets] = useState<any[]>([]);
   
+  // 🎉 UPCOMING EVENTS STATE 🎉
+  const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
+  
   // 🔔 UNREAD NOTIFICATIONS, PETITIONS & VOTING STATE 🔔
   const [unreadCount, setUnreadCount] = useState(0);
   const [activePetitions, setActivePetitions] = useState<any[]>([]);
@@ -134,6 +137,32 @@ export default function CitizenDashboard() {
     return () => unsubscribe();
   }, [userData]);
 
+  // 🎉 UPCOMING EVENTS RADAR FETCHER 🎉
+  useEffect(() => {
+    if (!userData?.district) return;
+
+    const q = query(collection(db, "events"), where("region", "in", [userData.district, "National"]));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const threeDaysLater = new Date(today);
+      threeDaysLater.setDate(today.getDate() + 3);
+
+      const docs: any[] = [];
+      snapshot.forEach((doc) => {
+        const ev = doc.data();
+        const evDate = ev.date?.toDate() || new Date(ev.date);
+        
+        if (ev.status !== 'Completed' && evDate >= today && evDate <= threeDaysLater) {
+          docs.push({ id: doc.id, ...ev, dateObj: evDate });
+        }
+      });
+      setUpcomingEvents(docs.sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime()));
+    });
+    return () => unsubscribe();
+  }, [userData]);
+
   // 🔔 UNREAD NOTIFICATIONS FETCHER 🔔
   useEffect(() => {
     if (!userData?.id) return;
@@ -237,12 +266,13 @@ export default function CitizenDashboard() {
       </div>
 
       {/* 🚀 UPCOMING PRIORITY RADAR SECTION 🚀 */}
-      {upcomingMeets.length > 0 && (
+      {(upcomingMeets.length > 0 || upcomingEvents.length > 0) && (
         <div>
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2 ml-1">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse border border-white shadow-sm"></span> Priority Action Radar (Next 3 Days)
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* MEETINGS */}
             {upcomingMeets.map((meet) => (
               <div key={meet.id} className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700 text-white relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-[#007AFF]/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
@@ -259,6 +289,28 @@ export default function CitizenDashboard() {
                 </div>
                 
                 <Link href="/dashboard/meetings" className="absolute bottom-4 right-4 bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
+                  <ArrowRight className="w-4 h-4 text-white" />
+                </Link>
+              </div>
+            ))}
+            
+            {/* EVENTS */}
+            {upcomingEvents.map((ev) => (
+              <div key={ev.id} className="bg-gradient-to-br from-blue-900 to-indigo-900 rounded-2xl p-5 shadow-lg border border-indigo-700 text-white relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[#FF9500]/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
+                
+                <div className="relative z-10">
+                  <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest mb-2 bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30`}>
+                    {ev.type} Event
+                  </span>
+                  <h4 className="font-black text-lg leading-tight mb-2 line-clamp-1">{ev.title}</h4>
+                  <div className="flex items-center gap-3 text-xs font-medium text-indigo-200">
+                    <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {ev.dateObj.toLocaleDateString()}</span>
+                    <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {ev.location.substring(0, 15)}...</span>
+                  </div>
+                </div>
+                
+                <Link href="/dashboard/events" className="absolute bottom-4 right-4 bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
                   <ArrowRight className="w-4 h-4 text-white" />
                 </Link>
               </div>
@@ -291,12 +343,17 @@ export default function CitizenDashboard() {
                 <span className="text-xs font-bold text-gray-900 relative z-10">Voting</span>
               </Link>
               
-              {/* BUTTON 2: VIEW PROGRESS */}
-              <Link href="/dashboard/progress" className="bg-white border border-gray-200 p-4 rounded-2xl hover:border-[#007AFF]/30 hover:shadow-lg transition-all group flex flex-col items-center text-center">
-                <div className="w-10 h-10 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <TrendingUp className="w-5 h-5"/>
+              {/* BUTTON 2: VIEW EVENTS */}
+              <Link href="/dashboard/events" className="bg-white border border-gray-200 p-4 rounded-2xl hover:border-[#FF9500]/30 hover:shadow-lg transition-all group flex flex-col items-center text-center relative overflow-hidden">
+                {upcomingEvents.length > 0 && (
+                  <span className="absolute top-2 right-2 flex items-center justify-center w-4 h-4 bg-[#FF9500] text-white text-[10px] font-black rounded-full animate-bounce shadow-sm z-10">
+                    {upcomingEvents.length}
+                  </span>
+                )}
+                <div className="w-10 h-10 bg-orange-50 text-[#FF9500] rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform relative z-10">
+                  <MapPin className="w-5 h-5"/>
                 </div>
-                <span className="text-xs font-bold text-gray-900">View Progress</span>
+                <span className="text-xs font-bold text-gray-900 relative z-10">Events</span>
               </Link>
 
               {/* BUTTON 3: FIND LEADERS */}

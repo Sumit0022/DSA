@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Shield, Eye, UserCircle, LogOut, Menu, X, Users, HeartHandshake, Calendar, ClipboardList, CheckSquare, Coins, IdCard } from "lucide-react";
+import { LayoutDashboard, Shield, Eye, UserCircle, LogOut, Menu, X, Users, HeartHandshake, Calendar, ClipboardList, CheckSquare, Coins, IdCard, MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getAuth, signOut } from "firebase/auth";
 import { useUser } from "@/hooks/useUser";
@@ -14,6 +14,7 @@ const citizenLinks = [
   { name: "My Profile", href: "/dashboard/profile", icon: UserCircle },
   { name: "Membership Card", href: "/dashboard/pass", icon: IdCard },
   { name: "Reward Points", href: "/dashboard/progress", icon: Coins },
+  { name: "Events & Campaigns", href: "/dashboard/events", icon: MapPin },
   { name: "Meetings", href: "/dashboard/meetings", icon: Calendar },
   { name: "View Leaders", href: "/dashboard/leaders", icon: Users },
   { name: "Voting", href: "/dashboard/voting", icon: CheckSquare },
@@ -124,15 +125,25 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
                   </Link>
                 );
               })}
-              {userData?.role && (
-                <Link 
-                  href="/dashboard/workspace" 
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 rounded-xl font-black transition-all border border-[#007AFF]/20"
-                >
-                  <ClipboardList className="w-5 h-5" />
-                  Leader Workspace
-                </Link>
+              {(userData?.role || (userData?.roleLevel && userData.roleLevel > 0)) && (
+                <>
+                  <Link 
+                    href="/dashboard/workspace" 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 rounded-xl font-black transition-all border border-[#007AFF]/20"
+                  >
+                    <ClipboardList className="w-5 h-5" />
+                    Leader Workspace
+                  </Link>
+                  <Link 
+                    href="/dashboard/manage-events" 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#FF9500]/10 text-[#FF9500] hover:bg-[#FF9500]/20 rounded-xl font-black transition-all border border-[#FF9500]/20"
+                  >
+                    <Calendar className="w-5 h-5" />
+                    Manage Events
+                  </Link>
+                </>
               )}
             </div>
 
@@ -183,14 +194,23 @@ export default function CitizenLayout({ children }: { children: React.ReactNode 
               </Link>
             );
           })}
-          {userData?.role && (
-            <Link 
-              href="/dashboard/workspace" 
-              className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 rounded-xl font-black transition-all border border-[#007AFF]/20"
-            >
-              <ClipboardList className="w-5 h-5" />
-              Leader Workspace
-            </Link>
+          {(userData?.role || (userData?.roleLevel && userData.roleLevel > 0)) && (
+            <>
+              <Link 
+                href="/dashboard/workspace" 
+                className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 rounded-xl font-black transition-all border border-[#007AFF]/20"
+              >
+                <ClipboardList className="w-5 h-5" />
+                Leader Workspace
+              </Link>
+              <Link 
+                href="/dashboard/manage-events" 
+                className="flex items-center gap-3 px-4 py-3 mt-2 bg-[#FF9500]/10 text-[#FF9500] hover:bg-[#FF9500]/20 rounded-xl font-black transition-all border border-[#FF9500]/20"
+              >
+                <Calendar className="w-5 h-5" />
+                Manage Events
+              </Link>
+            </>
           )}
         </div>
 

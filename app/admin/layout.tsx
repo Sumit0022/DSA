@@ -14,6 +14,7 @@ import { CheckSquare } from "lucide-react";
 import { Newspaper } from "lucide-react";
 import { Images } from "lucide-react";
 import { Coins } from "lucide-react";
+import { Calendar } from "lucide-react";
 
 const sidebarLinks = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -22,6 +23,7 @@ const sidebarLinks = [
   { name: "Analytics", href: "/admin/analytics", icon: Brain },
   { name: "Voting", href: "/admin/voting", icon: CheckSquare },
   { name: "Press Release", href: "/admin/press", icon: Newspaper },
+  { name: "Events", href: "/admin/events", icon: Calendar },
   { name: "Newsletter", href: "/admin/newsletter", icon: Mail },
   { name: "Gallery", href: "/admin/gallery", icon: Images },
   { name: "Petitions", href: "/admin/petitions", icon: Signature },

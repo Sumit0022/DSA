@@ -31,6 +31,7 @@ export default function Navbar() {
   if (shouldHide) return null;
 
   const navLinks = [
+    { name: "Events", path: "/events" },
     { name: "Vision", path: "/vision" },
     { name: "Gallery", path: "/gallery" },
     { name: "Press Wire", path: "/press" },

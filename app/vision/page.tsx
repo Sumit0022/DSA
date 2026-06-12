@@ -1027,8 +1027,8 @@ export default function VisionPage() {
           --ink: #1e2730;
           --ink-soft: #6b7585;
           --ink-body: #3c4651;
-          --gold: #b8863a;
-          --gold-soft: #f1e4c8;
+          --gold: #007AFF;
+          --gold-soft: #EFF6FF;
           --rule: #e2dcce;
         }
 
